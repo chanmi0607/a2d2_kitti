@@ -1,0 +1,22 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python Debugger: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "/home/a/OpenPCDet/tools/train.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--cfg_file", "/home/a/OpenPCDet/tools/cfgs/a2d2_models/second.yaml",
+                "--extra_tag", "a2d2_test"
+                //"--ckpt", "/home/a/OpenPCDet/output/cfgs/a2d2_models/second/a2d2_calib/ckpt/checkpoint_epoch_100.pth",
+                //"--data_path", "data/a2d2/training/velodyne/000000091.bin"
+                //"--data_path", "/home/a/kitti_bin/000000091.bin"
+            ]
+        }
+    ]
+}
