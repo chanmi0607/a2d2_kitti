@@ -4,7 +4,7 @@ CLASS_NAMES: ['Car','Truck','UtilityVehicle','Cyclist','Bicycle','MotorBiker','B
 DATASET: 'A2D2Dataset'
 DATA_PATH: '/home/a/OpenPCDet/data/a2d2'
 
-POINT_CLOUD_RANGE: [-50, -50, -3, 50, 50, 3]
+POINT_CLOUD_RANGE: [-50, -50, 0, 50, 50, 4]
 
 DATA_SPLIT: {
     'train': 'train',
