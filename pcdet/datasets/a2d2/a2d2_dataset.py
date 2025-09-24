@@ -8,7 +8,7 @@ from . import a2d2_utils
 from ...ops.roiaware_pool3d import roiaware_pool3d_utils
 from pathlib import Path
 #We use some functions from KITTI dataset utils
-from ...utils import box_utils, calibration_kitti, common_utils, object3d_kitti
+from ...utils import box_utils, calibration_kitti, common_utils, object3d_custom
 from ..dataset import DatasetTemplate
 
 class A2D2Dataset(DatasetTemplate):
@@ -89,7 +89,7 @@ class A2D2Dataset(DatasetTemplate):
     def get_label(self, idx):
         label_file = self.root_split_path / 'label_2' / ('%s.txt' % idx)
         assert label_file.exists()
-        return object3d_kitti.get_objects_from_label(label_file)
+        return object3d_custom.get_objects_from_label(label_file)
 
     def get_depth_map(self, idx):
         """
@@ -171,6 +171,7 @@ class A2D2Dataset(DatasetTemplate):
             info['calib'] = calib_info
 
             if has_label:
+
                 obj_list = self.get_label(sample_idx)
                 annotations = {}
                 annotations['name'] = np.array([obj.cls_type for obj in obj_list])
@@ -189,9 +190,12 @@ class A2D2Dataset(DatasetTemplate):
                 index = list(range(num_objects)) + [-1] * (num_gt - num_objects)
                 annotations['index'] = np.array(index, dtype=np.int32)
 
-                loc = annotations['location'][:num_objects]
-                dims = annotations['dimensions'][:num_objects]
-                rots = annotations['rotation_y'][:num_objects]
+                # loc = annotations['location'][:num_objects]
+                # dims = annotations['dimensions'][:num_objects]
+                # rots = annotations['rotation_y'][:num_objects]
+                loc = annotations['location']
+                dims = annotations['dimensions']
+                rots = annotations['rotation_y']
                 loc_lidar = calib.rect_to_lidar(loc)
                 l, h, w = dims[:, 0:1], dims[:, 1:2], dims[:, 2:3]
                 loc_lidar[:, 2] += h[:, 0] / 2
@@ -214,7 +218,7 @@ class A2D2Dataset(DatasetTemplate):
                         flag = box_utils.in_hull(pts_fov[:, 0:3], corners_lidar[k])
                         num_points_in_gt[k] = flag.sum()
                     annotations['num_points_in_gt'] = num_points_in_gt
-
+                info['annos'] = common_utils.drop_info_with_name(info['annos'], name='DontCare')
             return info
 
         sample_id_list = sample_id_list if sample_id_list is not None else self.sample_id_list
@@ -388,7 +392,7 @@ class A2D2Dataset(DatasetTemplate):
 
         if 'annos' in info:
             annos = info['annos']
-            annos = common_utils.drop_info_with_name(annos, name='DontCare')
+            # annos = common_utils.drop_info_with_name(annos, name='DontCare')
             loc, dims, rots = annos['location'], annos['dimensions'], annos['rotation_y']
             gt_names = annos['name']
             gt_boxes_camera = np.concatenate([loc, dims, rots[..., np.newaxis]], axis=1).astype(np.float32)

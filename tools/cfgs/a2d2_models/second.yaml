@@ -79,7 +79,7 @@ MODEL:
             },
             {
                 'class_name': 'Bicycle',
-                'anchor_sizes': [[1.75, 0.7, 1.58]],
+                'anchor_sizes': [[1.65, 0.65, 1.52]],
                 'anchor_rotations': [0, 1.57],
                 'anchor_bottom_heights': [0],
                 'align_center': False,
@@ -162,7 +162,7 @@ MODEL:
 
 
 OPTIMIZATION:
-    BATCH_SIZE_PER_GPU: 1
+    BATCH_SIZE_PER_GPU: 4
     NUM_EPOCHS: 200
 
     OPTIMIZER: adam_onecycle
