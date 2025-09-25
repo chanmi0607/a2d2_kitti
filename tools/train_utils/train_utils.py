@@ -55,55 +55,55 @@ def train_one_epoch(model, optimizer, train_loader, model_func, lr_scheduler, ac
             if 'gt_names' in batch:
                 print("[DEBUG] 클래스 이름:", batch['gt_names'][0])
 
-            # train_one_epoch 함수 내부
-            # ✅ 시각화 (첫 배치의 모든 샘플)
-            try:
-                # ❗️ NEW: Add torch import if not already present
-                from visual_utils import open3d_vis_utils as V
+            # # train_one_epoch 함수 내부
+            # # ✅ 시각화 (첫 배치의 모든 샘플)
+            # try:
+            #     # ❗️ NEW: Add torch import if not already present
+            #     from visual_utils import open3d_vis_utils as V
                 
-                # 시각화는 첫 번째 배치에 대해서만 수행
-                if accumulated_iter == 0:
-                    print("\n[DEBUG] Visualizing first batch...")
+            #     # 시각화는 첫 번째 배치에 대해서만 수행
+            #     if accumulated_iter == 0:
+            #         print("\n[DEBUG] Visualizing first batch...")
                     
-                    batch_size = batch['batch_size']
+            #         batch_size = batch['batch_size']
                     
-                    # --- ▼▼▼▼▼ 수정된 부분 ▼▼▼▼▼ ---
-                    # 데이터가 텐서(Tensor)일 경우에만 .cpu().numpy()를 호출하도록 수정
+            #         # --- ▼▼▼▼▼ 수정된 부분 ▼▼▼▼▼ ---
+            #         # 데이터가 텐서(Tensor)일 경우에만 .cpu().numpy()를 호출하도록 수정
                     
-                    points_data = batch['points']
-                    points_full = points_data.cpu().numpy() if isinstance(points_data, torch.Tensor) else points_data
+            #         points_data = batch['points']
+            #         points_full = points_data.cpu().numpy() if isinstance(points_data, torch.Tensor) else points_data
 
-                    gt_boxes_data = batch['gt_boxes']
-                    gt_boxes_full = gt_boxes_data.cpu().numpy() if isinstance(gt_boxes_data, torch.Tensor) else gt_boxes_data
-                    # --- ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ ---
+            #         gt_boxes_data = batch['gt_boxes']
+            #         gt_boxes_full = gt_boxes_data.cpu().numpy() if isinstance(gt_boxes_data, torch.Tensor) else gt_boxes_data
+            #         # --- ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ ---
 
-                    # 배치의 각 샘플에 대해 반복
-                    for i in range(batch_size):
-                        # frame_id는 보통 list 형태이므로 .cpu().numpy()가 필요 없습니다.
-                        frame_id = batch['frame_id'][i]
-                        print(f"  - Visualizing sample {i+1}/{batch_size}, Frame ID: {frame_id}")
+            #         # 배치의 각 샘플에 대해 반복
+            #         for i in range(batch_size):
+            #             # frame_id는 보통 list 형태이므로 .cpu().numpy()가 필요 없습니다.
+            #             frame_id = batch['frame_id'][i]
+            #             print(f"  - Visualizing sample {i+1}/{batch_size}, Frame ID: {frame_id}")
 
-                        # 현재 샘플(i)에 해당하는 포인트만 필터링
-                        pts_mask = (points_full[:, 0] == i)
-                        pts = points_full[pts_mask][:, 1:4] 
+            #             # 현재 샘플(i)에 해당하는 포인트만 필터링
+            #             pts_mask = (points_full[:, 0] == i)
+            #             pts = points_full[pts_mask][:, 1:4] 
 
-                        # 현재 샘플(i)에 해당하는 GT 박스 추출
-                        gt_boxes_sample = gt_boxes_full[i]
+            #             # 현재 샘플(i)에 해당하는 GT 박스 추출
+            #             gt_boxes_sample = gt_boxes_full[i]
                         
-                        # 유효한 GT 박스만 필터링 (패딩된 박스 제외)
-                        valid_mask = np.all(gt_boxes_sample[:, 3:6] > 0, axis=1)
-                        gt_boxes = gt_boxes_sample[valid_mask, :7]
+            #             # 유효한 GT 박스만 필터링 (패딩된 박스 제외)
+            #             valid_mask = np.all(gt_boxes_sample[:, 3:6] > 0, axis=1)
+            #             gt_boxes = gt_boxes_sample[valid_mask, :7]
 
-                        # 시각화 함수 호출
-                        V.draw_scenes(points=pts, gt_boxes=gt_boxes)
+            #             # 시각화 함수 호출
+            #             V.draw_scenes(points=pts, gt_boxes=gt_boxes)
                         
-                    print("[DEBUG] Visualization for the first batch is done.")
+            #         print("[DEBUG] Visualization for the first batch is done.")
 
-            except Exception as e:
-                # 에러 메시지를 더 자세히 출력하도록 수정
-                import traceback
-                print(f"[DEBUG] Visualization failed: {e}")
-                traceback.print_exc()
+            # except Exception as e:
+            #     # 에러 메시지를 더 자세히 출력하도록 수정
+            #     import traceback
+            #     print(f"[DEBUG] Visualization failed: {e}")
+            #     traceback.print_exc()
 
         # ===========================
         
