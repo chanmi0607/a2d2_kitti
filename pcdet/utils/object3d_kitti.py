@@ -1,5 +1,11 @@
 import numpy as np
+# 프로젝트의 전체 클래스 목록 (설정 파일 등에서 가져오는 것을 권장)
+CLASS_NAMES = ['Car', 'Truck', 'UtilityVehicle', 'Cyclist', 'Bicycle', 'MotorBiker', 'Bus', 'Trailer', 'Pedestrian']
 
+# CLASS_NAMES 리스트를 기반으로 {클래스이름: ID} 딕셔너리를 자동으로 생성
+# {'Car': 1, 'Truck': 2, 'UtilityVehicle': 3, ...} 와 같이 만들어집니다.
+# enumerate의 start=1 옵션을 통해 ID를 0이 아닌 1부터 시작하도록 합니다.
+CLASS_NAME_TO_ID = {name: i for i, name in enumerate(CLASS_NAMES, start=1)}
 
 def get_objects_from_label(label_file):
     with open(label_file, 'r') as f:
@@ -9,10 +15,11 @@ def get_objects_from_label(label_file):
 
 
 def cls_type_to_id(cls_type):
-    type_to_id = {'Car': 1, 'Pedestrian': 2, 'Cyclist': 3, 'Van': 4}
-    if cls_type not in type_to_id.keys():
-        return -1
-    return type_to_id[cls_type]
+    # type_to_id = {'Car': 1, 'Pedestrian': 2, 'Cyclist': 3, 'Van': 4}
+    # if cls_type not in type_to_id.keys():
+    #     return -1
+    # return type_to_id[cls_type]
+    return CLASS_NAME_TO_ID.get(cls_type, -1)
 
 
 class Object3d(object):

@@ -9,6 +9,7 @@ from ...ops.roiaware_pool3d import roiaware_pool3d_utils
 from pathlib import Path
 #We use some functions from KITTI dataset utils
 from ...utils import box_utils, calibration_kitti, common_utils, object3d_custom
+from tools.visual_utils import open3d_vis_utils as V # <--- 이 라인을 추가하세요.
 from ..dataset import DatasetTemplate
 
 class A2D2Dataset(DatasetTemplate):
@@ -65,6 +66,29 @@ class A2D2Dataset(DatasetTemplate):
         lidar_file = self.root_split_path / 'velodyne' / ('%s.bin' % idx)
         assert lidar_file.exists()
         return np.fromfile(str(lidar_file), dtype=np.float32).reshape(-1, 4)
+
+    # def get_lidar(self, idx):
+    #     lidar_file = self.root_split_path / 'velodyne' / ('%s.bin' % idx)ㄹ
+    #     assert lidar_file.exists()
+    #     points = np.fromfile(str(lidar_file), dtype=np.float32).reshape(-1, 4)
+        
+    #     # Pitch 보정 (하드코딩) - 필요에 따라 값 조정
+    #     pitch_angle = np.deg2rad(-4.0)  # 도 단위로 설정 (예: 1.5도)
+        
+    #     if pitch_angle != 0:
+    #         # Pitch 회전 행렬 (X축 중심 회전)
+    #         cos_pitch = np.cos(pitch_angle)
+    #         sin_pitch = np.sin(pitch_angle)
+    #         pitch_rotation = np.array([
+    #             [1, 0, 0],
+    #             [0, cos_pitch, -sin_pitch],
+    #             [0, sin_pitch, cos_pitch]
+    #         ])
+            
+    #         # XYZ 좌표에만 회전 적용, intensity는 유지
+    #         points[:, :3] = points[:, :3] @ pitch_rotation.T
+            
+    #         return points
 
     def get_image(self, idx):
         """
@@ -171,7 +195,6 @@ class A2D2Dataset(DatasetTemplate):
             info['calib'] = calib_info
 
             if has_label:
-
                 obj_list = self.get_label(sample_idx)
                 annotations = {}
                 annotations['name'] = np.array([obj.cls_type for obj in obj_list])
@@ -179,7 +202,7 @@ class A2D2Dataset(DatasetTemplate):
                 annotations['occluded'] = np.array([obj.occlusion for obj in obj_list])
                 annotations['alpha'] = np.array([obj.alpha for obj in obj_list])
                 annotations['bbox'] = np.concatenate([obj.box2d.reshape(1, 4) for obj in obj_list], axis=0)
-                annotations['dimensions'] = np.array([[obj.l, obj.h, obj.w] for obj in obj_list])  # lhw(camera) format
+                annotations['dimensions'] = np.array([[obj.l, obj.h, obj.w] for obj in obj_list])
                 annotations['location'] = np.concatenate([obj.loc.reshape(1, 3) for obj in obj_list], axis=0)
                 annotations['rotation_y'] = np.array([obj.ry for obj in obj_list])
                 annotations['score'] = np.array([obj.score for obj in obj_list])
@@ -190,15 +213,12 @@ class A2D2Dataset(DatasetTemplate):
                 index = list(range(num_objects)) + [-1] * (num_gt - num_objects)
                 annotations['index'] = np.array(index, dtype=np.int32)
 
-                # loc = annotations['location'][:num_objects]
-                # dims = annotations['dimensions'][:num_objects]
-                # rots = annotations['rotation_y'][:num_objects]
                 loc = annotations['location']
                 dims = annotations['dimensions']
                 rots = annotations['rotation_y']
                 loc_lidar = calib.rect_to_lidar(loc)
                 l, h, w = dims[:, 0:1], dims[:, 1:2], dims[:, 2:3]
-                loc_lidar[:, 2] += h[:, 0] / 2
+                loc_lidar[:, 1] -= h[:, 0] / 3  # Y축으로 높이 보정
                 gt_boxes_lidar = np.concatenate([loc_lidar, l, w, h, -(np.pi / 2 + rots[..., np.newaxis])], axis=1)
                 annotations['gt_boxes_lidar'] = gt_boxes_lidar
 
@@ -218,12 +238,27 @@ class A2D2Dataset(DatasetTemplate):
                         flag = box_utils.in_hull(pts_fov[:, 0:3], corners_lidar[k])
                         num_points_in_gt[k] = flag.sum()
                     annotations['num_points_in_gt'] = num_points_in_gt
-                info['annos'] = common_utils.drop_info_with_name(info['annos'], name='DontCare')
-            return info
 
+                info['annos'] = common_utils.drop_info_with_name(info['annos'], name='DontCare')
+
+                # 4. 시각화
+                # V.draw_scenes(
+                #     points=points[:, :3], 
+                #     gt_boxes=gt_boxes_lidar
+                # )
+            return info
         sample_id_list = sample_id_list if sample_id_list is not None else self.sample_id_list
+        # # --- ▼▼▼▼▼ 시각화를 위해 병렬 처리 대신 순차 처리로 변경 ▼▼▼▼▼ ---
+        # # 디버깅 및 시각화를 할 때는 아래의 for문을 사용하세요.
+        # infos = []
+        # for sample_id in sample_id_list:
+        #     infos.append(process_single_scene(sample_id))
+
+        # 원래의 병렬 처리 코드 (시각화가 끝나면 위 for문을 지우고 아래 코드의 주석을 해제하세요)
         with futures.ThreadPoolExecutor(num_workers) as executor:
             infos = executor.map(process_single_scene, sample_id_list)
+        # --- ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ ---
+        
         return list(infos)
 
     def create_groundtruth_database(self, info_path=None, used_classes=None, split='train'):
@@ -373,6 +408,7 @@ class A2D2Dataset(DatasetTemplate):
 
         return len(self.a2d2_infos)
 
+
     def __getitem__(self, index):
         # index = 4
         if self._merge_all_iters_to_one_epoch:
@@ -391,12 +427,34 @@ class A2D2Dataset(DatasetTemplate):
         }
 
         if 'annos' in info:
-            annos = info['annos']
-            # annos = common_utils.drop_info_with_name(annos, name='DontCare')
-            loc, dims, rots = annos['location'], annos['dimensions'], annos['rotation_y']
+            # get_infos의 process_single_scene과 동일한 로직 적용
+            obj_list = self.get_label(sample_idx)
+            annos = {}
+            annos['name'] = np.array([obj.cls_type for obj in obj_list])
+            annos['truncated'] = np.array([obj.truncation for obj in obj_list])
+            annos['occluded'] = np.array([obj.occlusion for obj in obj_list])
+            annos['alpha'] = np.array([obj.alpha for obj in obj_list])
+            annos['bbox'] = np.concatenate([obj.box2d.reshape(1, 4) for obj in obj_list], axis=0)
+            annos['dimensions'] = np.array([[obj.l, obj.h, obj.w] for obj in obj_list])
+            annos['location'] = np.concatenate([obj.loc.reshape(1, 3) for obj in obj_list], axis=0)
+            annos['rotation_y'] = np.array([obj.ry for obj in obj_list])
+            
+            # DontCare 클래스 필터링
+            annos = common_utils.drop_info_with_name(annos, name='DontCare')
+
+            # LiDAR 좌표계 변환 로직 (get_infos와 동일하게)
+            loc = annos['location']
+            dims = annos['dimensions']
+            rots = annos['rotation_y']
             gt_names = annos['name']
-            gt_boxes_camera = np.concatenate([loc, dims, rots[..., np.newaxis]], axis=1).astype(np.float32)
-            gt_boxes_lidar = box_utils.boxes3d_kitti_camera_to_lidar(gt_boxes_camera, calib)
+            
+            loc_lidar = calib.rect_to_lidar(loc)
+            l, h, w = dims[:, 0:1], dims[:, 1:2], dims[:, 2:3]
+            loc_lidar[:, 1] -= h[:, 0] / 3  # Y축으로 높이 보정
+            
+            # [x, y, z, l, w, h, heading] 형식으로 gt_boxes_lidar 생성
+            # heding: -(pi/2 + ry)
+            gt_boxes_lidar = np.concatenate([loc_lidar, l, w, h, -(np.pi / 2 + rots[..., np.newaxis])], axis=1)
 
             input_dict.update({
                 'gt_names': gt_names,
@@ -409,6 +467,15 @@ class A2D2Dataset(DatasetTemplate):
             if road_plane is not None:
                 input_dict['road_plane'] = road_plane
 
+            # -------------------- ▲▲▲▲▲ 여기까지 입니다 ▲▲▲▲▲ --------------------
+
+            if "gt_boxes2d" in get_item_list:
+                input_dict['gt_boxes2d'] = annos["bbox"]
+
+            road_plane = self.get_road_plane(sample_idx)
+            if road_plane is not None:
+                input_dict['road_plane'] = road_plane
+                
         if "points" in get_item_list:
             points = self.get_lidar(sample_idx)
             if self.dataset_cfg.FOV_POINTS_ONLY:

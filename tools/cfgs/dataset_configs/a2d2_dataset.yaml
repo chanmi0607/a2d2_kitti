@@ -4,7 +4,7 @@ CLASS_NAMES: ['Car','Truck','UtilityVehicle','Cyclist','Bicycle','MotorBiker','B
 DATASET: 'A2D2Dataset'
 DATA_PATH: '/home/a/OpenPCDet/data/a2d2'
 
-POINT_CLOUD_RANGE: [-50, -50, 0, 50, 50, 4]
+POINT_CLOUD_RANGE: [-50, -50, 0, 50, 50, 6]
 
 DATA_SPLIT: {
     'train': 'train',
@@ -23,26 +23,26 @@ FOV_POINTS_ONLY: False
 DATA_AUGMENTOR:
     DISABLE_AUG_LIST: ['placeholder']
     AUG_CONFIG_LIST:
-        - NAME: gt_sampling
-          USE_ROAD_PLANE: False # A2D2 데이터셋에는 도로 평면 정보가 없으므로 False로 설정
-          DB_INFO_PATH:
-              - /home/a/OpenPCDet/data/a2d2/a2d2_dbinfos_train.pkl
-          PREPARE: {
-             # 각 클래스별 최소 포인트 수를 지정해 너무 작은 객체는 제외
-             filter_by_min_points: ['Car:5', 'Pedestrian:5', 'Bicycle:5', 'Truck:5', 'UtilityVehicle:5', 'MotorBiker:5', 'Bus:5', 'Trailer:5', 'Cyclist:5'],
-             filter_by_difficulty: [-1],
-          }
+        # - NAME: gt_sampling
+        #   USE_ROAD_PLANE: False # A2D2 데이터셋에는 도로 평면 정보가 없으므로 False로 설정
+        #   DB_INFO_PATH:
+        #       - /home/a/OpenPCDet/data/a2d2/a2d2_dbinfos_train.pkl
+        #   PREPARE: {
+        #      # 각 클래스별 최소 포인트 수를 지정해 너무 작은 객체는 제외
+        #      filter_by_min_points: ['Car:5', 'Pedestrian:5', 'Bicycle:5', 'Truck:5', 'UtilityVehicle:5', 'MotorBiker:5', 'Bus:5', 'Trailer:5', 'Cyclist:5'],
+        #      filter_by_difficulty: [-1],
+        #   }
 
-          # 각 클래스 별 샘플링 개수 지정
-          SAMPLE_GROUPS: ['Car:20','Pedestrian:10', 'Bicycle:10', 'Truck:10', 'UtilityVehicle:5', 'MotorBiker:5', 'Bus:10', 'Trailer:5', 'Cyclist:5']
-          NUM_POINT_FEATURES: 4
-          DATABASE_WITH_FAKELIDAR: False
-          REMOVE_EXTRA_WIDTH: [0.0, 0.0, 0.0]
-          LIMIT_WHOLE_SCENE: True
+        #   # 각 클래스 별 샘플링 개수 지정
+        #   SAMPLE_GROUPS: ['Car:20','Pedestrian:10', 'Bicycle:10', 'Truck:10', 'UtilityVehicle:5', 'MotorBiker:5', 'Bus:10', 'Trailer:5', 'Cyclist:5']
+        #   NUM_POINT_FEATURES: 4
+        #   DATABASE_WITH_FAKELIDAR: False
+        #   REMOVE_EXTRA_WIDTH: [0.0, 0.0, 0.0]
+        #   LIMIT_WHOLE_SCENE: True
 
-        # x축기준으로 좌우반전을 해 데이터 다양성을 높임
-        - NAME: random_world_flip
-          ALONG_AXIS_LIST: ['x']
+        # # x축기준으로 좌우반전을 해 데이터 다양성을 높임
+        # - NAME: random_world_flip
+        #   ALONG_AXIS_LIST: ['x']
 
         # # 각도 범위 내에서 무작위로 회전시켜 데이터 다양성을 높임
         - NAME: random_world_rotation
@@ -70,7 +70,7 @@ DATA_PROCESSOR:
       }
 
     - NAME: transform_points_to_voxels
-      VOXEL_SIZE: [0.05, 0.05, 0.1]
+      VOXEL_SIZE: [0.05, 0.05, 0.15]
       MAX_POINTS_PER_VOXEL: 5
       MAX_NUMBER_OF_VOXELS: {
         'train': 16000,

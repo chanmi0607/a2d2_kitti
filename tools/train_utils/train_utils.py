@@ -4,6 +4,9 @@ import torch
 import tqdm
 import time
 import glob
+
+import numpy as np
+
 from torch.nn.utils import clip_grad_norm_
 from pcdet.utils import common_utils, commu_utils
 
@@ -36,59 +39,73 @@ def train_one_epoch(model, optimizer, train_loader, model_func, lr_scheduler, ac
             batch = next(dataloader_iter)
             print('new iters')
 
-        # # ===========================
-        # # 🔎 DEBUG: 배치 데이터 확인
-        # # ===========================
-        # if cur_it == start_it:  # 첫 배치만 확인 (매번 하면 너무 많음)
-        #     print("\n[DEBUG] Batch keys:", batch.keys())
-        #     if 'points' in batch:
-        #         print("[DEBUG] Points shape:", batch['points'].shape)  
-        #         # 보통 (N, 5): [batch_idx, x, y, z, intensity]
-        #     if 'gt_boxes' in batch:
-        #         print("[DEBUG] GT Boxes shape:", batch['gt_boxes'].shape)  
-        #         # 보통 (B, M, 8): [batch, num_obj, (x,y,z,l,w,h,ry,class)]
-        #         print("[DEBUG] 첫 샘플 GT:", batch['gt_boxes'][0])
+        # ===========================
+        # 🔎 DEBUG: 배치 데이터 확인
+        # ===========================
+        if cur_it == start_it:  # 첫 배치만 확인 (매번 하면 너무 많음)
+            print("\n[DEBUG] Batch keys:", batch.keys())
+            if 'points' in batch:
+                print("[DEBUG] Points shape:", batch['points'].shape)  
+                # 보통 (N, 5): [batch_idx, x, y, z, intensity]
+            if 'gt_boxes' in batch:
+                print("[DEBUG] GT Boxes shape:", batch['gt_boxes'].shape)  
+                # 보통 (B, M, 8): [batch, num_obj, (x,y,z,l,w,h,ry,class)]
+                print("[DEBUG] 첫 샘플 GT:", batch['gt_boxes'][0])
 
-        #     if 'gt_names' in batch:
-        #         print("[DEBUG] 클래스 이름:", batch['gt_names'][0])
+            if 'gt_names' in batch:
+                print("[DEBUG] 클래스 이름:", batch['gt_names'][0])
 
-        #     # ✅ 시각화 (첫 샘플만)
-        #     try:
-        #         from visual_utils import open3d_vis_utils as V
-
-        #         # 프레임 ID 추출 (예시: batch['frame_id']가 있을 때)
-        #         frame_id = None
-        #         if 'frame_id' in batch:
-        #             frame_id = batch['frame_id'][0]
-        #         elif 'frame_ids' in batch:
-        #             frame_id = batch['frame_ids'][0]
-        #         else:
-        #             frame_id = 'unknown'
-
-        #         print(f"[DEBUG] Frame ID: {frame_id}")
-
-        #         # points: (N, 5) → [batch_idx, x, y, z, intensity]
-        #         pts_tensor = batch['points']
-        #         if isinstance(pts_tensor, torch.Tensor):
-        #             pts_tensor = pts_tensor.cpu().numpy()
-        #         mask = (pts_tensor[:, 0] == 0)   # 첫 번째 배치만
-        #         pts = pts_tensor[mask][:, 1:4]   # (x, y, z)
-
-        #         # gt_boxes: (B, M, 8)
-        #         gt_tensor = batch['gt_boxes'][0]
-        #         if isinstance(gt_tensor, torch.Tensor):
-        #             gt_tensor = gt_tensor.cpu().numpy()
-        #         valid_mask = (gt_tensor[:, 3] > 0) & (gt_tensor[:, 4] > 0) & (gt_tensor[:, 5] > 0)
-        #         gt_boxes = gt_tensor[valid_mask, :7]   # [x, y, z, l, w, h, ry]
-
-        #         V.draw_scenes(points=pts, gt_boxes=gt_boxes)
+            # train_one_epoch 함수 내부
+            # ✅ 시각화 (첫 배치의 모든 샘플)
+            try:
+                # ❗️ NEW: Add torch import if not already present
+                from visual_utils import open3d_vis_utils as V
                 
-        #         print("[DEBUG] Visualization done (첫 배치).")
+                # 시각화는 첫 번째 배치에 대해서만 수행
+                if accumulated_iter == 0:
+                    print("\n[DEBUG] Visualizing first batch...")
+                    
+                    batch_size = batch['batch_size']
+                    
+                    # --- ▼▼▼▼▼ 수정된 부분 ▼▼▼▼▼ ---
+                    # 데이터가 텐서(Tensor)일 경우에만 .cpu().numpy()를 호출하도록 수정
+                    
+                    points_data = batch['points']
+                    points_full = points_data.cpu().numpy() if isinstance(points_data, torch.Tensor) else points_data
 
-        #     except Exception as e:
-        #         print("[DEBUG] Visualization skipped:", e)
+                    gt_boxes_data = batch['gt_boxes']
+                    gt_boxes_full = gt_boxes_data.cpu().numpy() if isinstance(gt_boxes_data, torch.Tensor) else gt_boxes_data
+                    # --- ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ ---
 
-        # # ===========================
+                    # 배치의 각 샘플에 대해 반복
+                    for i in range(batch_size):
+                        # frame_id는 보통 list 형태이므로 .cpu().numpy()가 필요 없습니다.
+                        frame_id = batch['frame_id'][i]
+                        print(f"  - Visualizing sample {i+1}/{batch_size}, Frame ID: {frame_id}")
+
+                        # 현재 샘플(i)에 해당하는 포인트만 필터링
+                        pts_mask = (points_full[:, 0] == i)
+                        pts = points_full[pts_mask][:, 1:4] 
+
+                        # 현재 샘플(i)에 해당하는 GT 박스 추출
+                        gt_boxes_sample = gt_boxes_full[i]
+                        
+                        # 유효한 GT 박스만 필터링 (패딩된 박스 제외)
+                        valid_mask = np.all(gt_boxes_sample[:, 3:6] > 0, axis=1)
+                        gt_boxes = gt_boxes_sample[valid_mask, :7]
+
+                        # 시각화 함수 호출
+                        V.draw_scenes(points=pts, gt_boxes=gt_boxes)
+                        
+                    print("[DEBUG] Visualization for the first batch is done.")
+
+            except Exception as e:
+                # 에러 메시지를 더 자세히 출력하도록 수정
+                import traceback
+                print(f"[DEBUG] Visualization failed: {e}")
+                traceback.print_exc()
+
+        # ===========================
         
         data_timer = time.time()
         cur_data_time = data_timer - end
