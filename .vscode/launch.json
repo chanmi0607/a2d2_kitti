@@ -12,7 +12,7 @@
             "console": "integratedTerminal",
             "args": [
                 "--cfg_file", "/home/a/OpenPCDet/tools/cfgs/a2d2_models/second.yaml",
-                "--extra_tag", "a2d2_test"
+                "--extra_tag", "a2d2_lidar_only"
                 //"--ckpt", "/home/a/OpenPCDet/output/cfgs/a2d2_models/second/a2d2_calib/ckpt/checkpoint_epoch_100.pth",
                 //"--data_path", "data/a2d2/training/velodyne/000000091.bin"
                 //"--data_path", "/home/a/kitti_bin/000000091.bin"

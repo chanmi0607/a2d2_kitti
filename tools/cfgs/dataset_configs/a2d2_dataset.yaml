@@ -4,8 +4,7 @@ CLASS_NAMES: ['Car','Truck','UtilityVehicle','Cyclist','Bicycle','MotorBiker','B
 DATASET: 'A2D2Dataset'
 DATA_PATH: '/home/a/OpenPCDet/data/a2d2'
 
-POINT_CLOUD_RANGE: [-50, -50, 0, 50, 50, 6]
-
+POINT_CLOUD_RANGE: [-75.2, -75.2, -2, 75.2, 75.2, 6]
 DATA_SPLIT: {
     'train': 'train',
     'test': 'val'
@@ -70,7 +69,7 @@ DATA_PROCESSOR:
       }
 
     - NAME: transform_points_to_voxels
-      VOXEL_SIZE: [0.05, 0.05, 0.15]
+      VOXEL_SIZE: [0.1, 0.1, 0.2]
       MAX_POINTS_PER_VOXEL: 5
       MAX_NUMBER_OF_VOXELS: {
         'train': 16000,

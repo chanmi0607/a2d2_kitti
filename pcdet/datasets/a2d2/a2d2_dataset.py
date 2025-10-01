@@ -197,6 +197,7 @@ class A2D2Dataset(DatasetTemplate):
             if has_label:
                 obj_list = self.get_label(sample_idx)
                 annotations = {}
+            
                 annotations['name'] = np.array([obj.cls_type for obj in obj_list])
                 annotations['truncated'] = np.array([obj.truncation for obj in obj_list])
                 annotations['occluded'] = np.array([obj.occlusion for obj in obj_list])
@@ -223,21 +224,31 @@ class A2D2Dataset(DatasetTemplate):
                 annotations['gt_boxes_lidar'] = gt_boxes_lidar
 
                 info['annos'] = annotations
-
+                
                 if count_inside_pts:
                     points = self.get_lidar(sample_idx)
-                    calib = self.get_calib(sample_idx)
-                    pts_rect = calib.lidar_to_rect(points[:, 0:3])
-
-                    fov_flag = self.get_fov_flag(pts_rect, info['image']['image_shape'], calib)
-                    pts_fov = points[fov_flag]
-                    corners_lidar = box_utils.boxes_to_corners_3d(gt_boxes_lidar)
+                    corners_lidar = box_utils.boxes_to_corners_3d(annotations['gt_boxes_lidar'])
                     num_points_in_gt = -np.ones(num_gt, dtype=np.int32)
 
                     for k in range(num_objects):
-                        flag = box_utils.in_hull(pts_fov[:, 0:3], corners_lidar[k])
+                        flag = box_utils.in_hull(points[:, 0:3], corners_lidar[k])
                         num_points_in_gt[k] = flag.sum()
                     annotations['num_points_in_gt'] = num_points_in_gt
+
+                # if count_inside_pts:
+                #     points = self.get_lidar(sample_idx)
+                #     calib = self.get_calib(sample_idx)
+                #     pts_rect = calib.lidar_to_rect(points[:, 0:3])
+
+                #     fov_flag = self.get_fov_flag(pts_rect, info['image']['image_shape'], calib)
+                #     pts_fov = points[fov_flag]
+                #     corners_lidar = box_utils.boxes_to_corners_3d(gt_boxes_lidar)
+                #     num_points_in_gt = -np.ones(num_gt, dtype=np.int32)
+
+                #     for k in range(num_objects):
+                #         flag = box_utils.in_hull(pts_fov[:, 0:3], corners_lidar[k])
+                #         num_points_in_gt[k] = flag.sum()
+                #     annotations['num_points_in_gt'] = num_points_in_gt
 
                 info['annos'] = common_utils.drop_info_with_name(info['annos'], name='DontCare')
 
@@ -430,45 +441,53 @@ class A2D2Dataset(DatasetTemplate):
             # get_infos의 process_single_scene과 동일한 로직 적용
             obj_list = self.get_label(sample_idx)
             annos = {}
-            annos['name'] = np.array([obj.cls_type for obj in obj_list])
-            annos['truncated'] = np.array([obj.truncation for obj in obj_list])
-            annos['occluded'] = np.array([obj.occlusion for obj in obj_list])
-            annos['alpha'] = np.array([obj.alpha for obj in obj_list])
-            annos['bbox'] = np.concatenate([obj.box2d.reshape(1, 4) for obj in obj_list], axis=0)
-            annos['dimensions'] = np.array([[obj.l, obj.h, obj.w] for obj in obj_list])
-            annos['location'] = np.concatenate([obj.loc.reshape(1, 3) for obj in obj_list], axis=0)
-            annos['rotation_y'] = np.array([obj.ry for obj in obj_list])
+            
+            if len(obj_list) == 0:
+                # 빈 annotations 처리
+                annos['name'] = np.array([])
+                annos['truncated'] = np.array([])
+                annos['occluded'] = np.array([])
+                annos['alpha'] = np.array([])
+                annos['bbox'] = np.zeros((0, 4))
+                annos['dimensions'] = np.zeros((0, 3))
+                annos['location'] = np.zeros((0, 3))
+                annos['rotation_y'] = np.array([])
+            else:
+                annos['name'] = np.array([obj.cls_type for obj in obj_list])
+                annos['truncated'] = np.array([obj.truncation for obj in obj_list])
+                annos['occluded'] = np.array([obj.occlusion for obj in obj_list])
+                annos['alpha'] = np.array([obj.alpha for obj in obj_list])
+                annos['bbox'] = np.concatenate([obj.box2d.reshape(1, 4) for obj in obj_list], axis=0)
+                annos['dimensions'] = np.array([[obj.l, obj.h, obj.w] for obj in obj_list])
+                annos['location'] = np.concatenate([obj.loc.reshape(1, 3) for obj in obj_list], axis=0)
+                annos['rotation_y'] = np.array([obj.ry for obj in obj_list])
             
             # DontCare 클래스 필터링
             annos = common_utils.drop_info_with_name(annos, name='DontCare')
 
             # LiDAR 좌표계 변환 로직 (get_infos와 동일하게)
-            loc = annos['location']
-            dims = annos['dimensions']
-            rots = annos['rotation_y']
-            gt_names = annos['name']
-            
-            loc_lidar = calib.rect_to_lidar(loc)
-            l, h, w = dims[:, 0:1], dims[:, 1:2], dims[:, 2:3]
-            loc_lidar[:, 1] -= h[:, 0] / 3  # Y축으로 높이 보정
-            
-            # [x, y, z, l, w, h, heading] 형식으로 gt_boxes_lidar 생성
-            # heding: -(pi/2 + ry)
-            gt_boxes_lidar = np.concatenate([loc_lidar, l, w, h, -(np.pi / 2 + rots[..., np.newaxis])], axis=1)
+            if len(annos['name']) > 0:
+                loc = annos['location']
+                dims = annos['dimensions']
+                rots = annos['rotation_y']
+                gt_names = annos['name']
+                
+                loc_lidar = calib.rect_to_lidar(loc)
+                l, h, w = dims[:, 0:1], dims[:, 1:2], dims[:, 2:3]
+                loc_lidar[:, 1] -= h[:, 0] / 3  # Y축으로 높이 보정
+                
+                # [x, y, z, l, w, h, heading] 형식으로 gt_boxes_lidar 생성
+                # heading: -(pi/2 + ry)
+                gt_boxes_lidar = np.concatenate([loc_lidar, l, w, h, -(np.pi / 2 + rots[..., np.newaxis])], axis=1)
+            else:
+                gt_names = np.array([])
+                gt_boxes_lidar = np.zeros((0, 7))
 
             input_dict.update({
                 'gt_names': gt_names,
                 'gt_boxes': gt_boxes_lidar
             })
-            if "gt_boxes2d" in get_item_list:
-                input_dict['gt_boxes2d'] = annos["bbox"]
-
-            road_plane = self.get_road_plane(sample_idx)
-            if road_plane is not None:
-                input_dict['road_plane'] = road_plane
-
-            # -------------------- ▲▲▲▲▲ 여기까지 입니다 ▲▲▲▲▲ --------------------
-
+            
             if "gt_boxes2d" in get_item_list:
                 input_dict['gt_boxes2d'] = annos["bbox"]
 
