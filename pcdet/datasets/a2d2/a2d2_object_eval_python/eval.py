@@ -28,7 +28,8 @@ def get_thresholds(scores: np.ndarray, num_gt, num_sample_pts=41):
 
 
 def clean_data(gt_anno, dt_anno, current_class, difficulty):
-    CLASS_NAMES = ['car', 'pedestrian', 'cyclist', 'van', 'person_sitting', 'truck']
+    #CLASS_NAMES = ['car', 'truck', 'utilityvehicle', 'cyclist', 'bicycle', 'motorbiker', 'bus', 'trailer', 'pedestrian']
+    CLASS_NAMES = ['car', 'truck', 'utilityvehicle', 'cyclist', 'bus', 'trailer', 'pedestrian']
     MIN_HEIGHT = [40, 25, 25]
     MAX_OCCLUSION = [0, 1, 2]
     MAX_TRUNCATION = [0.15, 0.3, 0.5]
@@ -44,11 +45,11 @@ def clean_data(gt_anno, dt_anno, current_class, difficulty):
         valid_class = -1
         if (gt_name == current_cls_name):
             valid_class = 1
-        elif (current_cls_name == "Pedestrian".lower()
-              and "Person_sitting".lower() == gt_name):
-            valid_class = 0
-        elif (current_cls_name == "Car".lower() and "Van".lower() == gt_name):
-            valid_class = 0
+        # elif (current_cls_name == "Pedestrian".lower()
+        #       and "Person_sitting".lower() == gt_name):
+        #     valid_class = 0
+        # elif (current_cls_name == "Car".lower() and "Van".lower() == gt_name):
+        #     valid_class = 0
         else:
             valid_class = -1
         ignore = False
@@ -466,6 +467,23 @@ def eval_class(gt_annos,
     Returns:
         dict of recall, precision and aos
     """
+
+    # print("--- DEBUG START ---")
+    # # 첫 번째 샘플의 첫 번째 GT 박스 정보 출력
+    # if len(gt_annos[0]['name']) > 0:
+    #     print("GT Box (sample 0, box 0):")
+    #     print("  Location:", gt_annos[0]['location'][0])
+    #     print("  Dimensions:", gt_annos[0]['dimensions'][0])
+    #     print("  Rotation Y:", gt_annos[0]['rotation_y'][0])
+
+    # # 첫 번째 샘플의 첫 번째 DT 박스 정보 출력
+    # if len(dt_annos[0]['name']) > 0:
+    #     print("DT Box (sample 0, box 0):")
+    #     print("  Location:", dt_annos[0]['location'][0])
+    #     print("  Dimensions:", dt_annos[0]['dimensions'][0])
+    #     print("  Rotation Y:", dt_annos[0]['rotation_y'][0])
+    # print("--- DEBUG END ---")
+    
     assert len(gt_annos) == len(dt_annos)
     num_examples = len(gt_annos)
     split_parts = get_split_parts(num_examples, num_parts)
@@ -618,6 +636,7 @@ def do_eval(gt_annos,
     return mAP_bbox, mAP_bev, mAP_3d, mAP_aos, mAP_bbox_R40, mAP_bev_R40, mAP_3d_R40, mAP_aos_R40
 
 
+
 def do_coco_style_eval(gt_annos, dt_annos, current_classes, overlap_ranges,
                        compute_aos):
     # overlap_ranges: [range, metric, num_class]
@@ -637,20 +656,26 @@ def do_coco_style_eval(gt_annos, dt_annos, current_classes, overlap_ranges,
 
 
 def get_official_eval_result(gt_annos, dt_annos, current_classes, PR_detail_dict=None):
-    overlap_0_7 = np.array([[0.7, 0.5, 0.5, 0.7,
-                             0.5, 0.7], [0.7, 0.5, 0.5, 0.7, 0.5, 0.7],
-                            [0.7, 0.5, 0.5, 0.7, 0.5, 0.7]])
-    overlap_0_5 = np.array([[0.7, 0.5, 0.5, 0.7,
-                             0.5, 0.5], [0.5, 0.25, 0.25, 0.5, 0.25, 0.5],
-                            [0.5, 0.25, 0.25, 0.5, 0.25, 0.5]])
-    min_overlaps = np.stack([overlap_0_7, overlap_0_5], axis=0)  # [2, 3, 5]
+    # overlap_0_7 = np.array([
+    #     [0.7, 0.7, 0.7, 0.5, 0.5, 0.5, 0.7, 0.7, 0.5], # Bbox
+    #     [0.7, 0.7, 0.7, 0.5, 0.5, 0.5, 0.7, 0.7, 0.5], # BEV
+    #     [0.7, 0.7, 0.7, 0.5, 0.5, 0.5, 0.7, 0.7, 0.5]  # 3D
+    # ])
+    # overlap_0_5 = np.array([
+    #     [0.7, 0.7, 0.7, 0.5, 0.5, 0.5, 0.7, 0.7, 0.5],   # Bbox
+    #     [0.5, 0.5, 0.5, 0.25, 0.25, 0.25, 0.5, 0.5, 0.25], # BEV
+    #     [0.5, 0.5, 0.5, 0.25, 0.25, 0.25, 0.5, 0.5, 0.25]  # 3D
+    # ])
+    overlap_0_3 = np.full((3, 7), 0.3)
+    min_overlaps = np.stack([overlap_0_3], axis=0)  # [2, 3, 5]
     class_to_name = {
         0: 'Car',
-        1: 'Pedestrian',
-        2: 'Cyclist',
-        3: 'Van',
-        4: 'Person_sitting',
-        5: 'Truck'
+        1: 'Truck',
+        2: 'UtilityVehicle',
+        3: 'Cyclist',
+        4: 'Bus',
+        5: 'Trailer',
+        6: 'Pedestrian'
     }
     name_to_class = {v: n for n, v in class_to_name.items()}
     if not isinstance(current_classes, (list, tuple)):
@@ -685,9 +710,11 @@ def get_official_eval_result(gt_annos, dt_annos, current_classes, PR_detail_dict
             result += print_str((f"bbox AP:{mAPbbox[j, 0, i]:.4f}, "
                                  f"{mAPbbox[j, 1, i]:.4f}, "
                                  f"{mAPbbox[j, 2, i]:.4f}"))
+            
             result += print_str((f"bev  AP:{mAPbev[j, 0, i]:.4f}, "
                                  f"{mAPbev[j, 1, i]:.4f}, "
                                  f"{mAPbev[j, 2, i]:.4f}"))
+            
             result += print_str((f"3d   AP:{mAP3d[j, 0, i]:.4f}, "
                                  f"{mAP3d[j, 1, i]:.4f}, "
                                  f"{mAP3d[j, 2, i]:.4f}"))
@@ -749,17 +776,21 @@ def get_official_eval_result(gt_annos, dt_annos, current_classes, PR_detail_dict
 def get_coco_eval_result(gt_annos, dt_annos, current_classes):
     class_to_name = {
         0: 'Car',
-        1: 'Pedestrian',
-        2: 'Cyclist',
-        3: 'Van',
-        4: 'Person_sitting',
+        1: 'Truck',
+        2: 'UtilityVehicle',
+        3: 'Cyclist',
+        4: 'Bus',
+        5: 'Trailer',
+        6: 'Pedestrian'
     }
     class_to_range = {
-        0: [0.5, 0.95, 10],
-        1: [0.25, 0.7, 10],
-        2: [0.25, 0.7, 10],
-        3: [0.5, 0.95, 10],
-        4: [0.25, 0.7, 10],
+        0: [0.5, 0.95, 10],   # Car
+        1: [0.5, 0.95, 10],   # Truck
+        2: [0.5, 0.95, 10],   # UtilityVehicle
+        3: [0.25, 0.7, 10],   # Cyclist
+        4: [0.5, 0.95, 10],   # Bus
+        5: [0.5, 0.95, 10],   # Trailer
+        6: [0.25, 0.7, 10],   # Pedestrian
     }
     name_to_class = {v: n for n, v in class_to_name.items()}
     if not isinstance(current_classes, (list, tuple)):

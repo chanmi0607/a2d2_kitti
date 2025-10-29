@@ -1,218 +1,208 @@
-import os
+import pandas as pd
 import numpy as np
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.preprocessing import LabelEncoder
 import joblib
-from tqdm import tqdm
 from collections import Counter
-import cv2
-from multiprocessing import Pool, cpu_count
+import seaborn as sns
+import matplotlib.pyplot as plt
 
-# --- 필요한 모듈만 import ---
-from pcdet.datasets.processor.ground_removal import remove_ground_open3d, read_kitti_bin
-from pcdet.models.detectors.bev_utils import pointcloud_to_bev
-from pcdet.models.dense_heads.clustering_utils import cluster_bev_image
-from rf_gt_utils import get_a2d2_gt_boxes # KITTI GT 로더 (이전 파일 이름 그대로 사용)
+# --- 설정 ---
+# 1. 원본 데이터 파일 경로
+TRAINING_DATA_PATH = 'data/a2d2/rf_dataset_all.csv'
 
-# --- 헬퍼 함수 정의 ---
-def calculate_iou(boxA, boxB):
-    """두 바운딩 박스(x,y,w,h)의 IoU를 계산합니다."""
-    xA = max(boxA[0], boxB[0])
-    yA = max(boxA[1], boxB[1])
-    xB = min(boxA[0] + boxA[2], boxB[0] + boxB[2])
-    yB = min(boxA[1] + boxA[3], boxB[1] + boxB[3])
-    interArea = max(0, xB - xA) * max(0, yB - yA)
-    boxAArea = boxA[2] * boxA[3]
-    boxBArea = boxB[2] * boxB[3]
-    iou = interArea / float(boxAArea + boxBArea - interArea) if (boxAArea + boxBArea - interArea) > 0 else 0
-    return iou
+# 2. 학습/검증용 프레임 ID 목록 파일 경로
+TRAIN_FILE_PATH = 'data/a2d2/ImageSets/train.txt'  # 👈 train.txt 파일이 있는 경로로 수정!
+VAL_FILE_PATH = 'data/a2d2/ImageSets/val.txt'      # 👈 val.txt 파일이 있는 경로로 수정!
 
-def extract_features_from_clusters(clusters, resolution, non_ground_points, bev_x_range, bev_y_range):
-    """클러스터에서 3D 통계 특징을 포함한 벡터를 추출합니다."""
-    all_features, valid_clusters = [], []
-    for (x, y, w_pixels, h_pixels) in clusters:
-        x_max_world = bev_x_range[1] - (y * resolution)
-        x_min_world = bev_x_range[1] - ((y + h_pixels) * resolution)
-        y_max_world = bev_y_range[1] - (x * resolution)
-        y_min_world = bev_y_range[1] - ((x + w_pixels) * resolution)
-        mask = np.where(
-            (non_ground_points[:, 0] >= x_min_world) & (non_ground_points[:, 0] < x_max_world) &
-            (non_ground_points[:, 1] >= y_min_world) & (non_ground_points[:, 1] < y_max_world)
-        )
-        points_in_box = non_ground_points[mask]
-        if len(points_in_box) < 2: continue
-        
-        w, l = w_pixels * resolution, h_pixels * resolution
-        h = np.max(points_in_box[:, 2]) - np.min(points_in_box[:, 2])
-        z_std = np.std(points_in_box[:, 2])
-        
-        feature_vector = [w, l, len(points_in_box), h, z_std]
-        all_features.append(feature_vector)
-        valid_clusters.append((x, y, w_pixels, h_pixels))
-    return valid_clusters, np.array(all_features) if all_features else np.array([])
+# 3. CSV 파일에서 프레임 ID를 식별하는 컬럼 이름
+FRAME_ID_COLUMN = 'frame_id'
 
-# ========================== 설정 (전역 변수) ==========================
-BASE_DIR = "/home/a/OpenPCDet/data/a2d2/training"
-BIN_DATA_DIR = os.path.join(BASE_DIR, "velodyne")
-LABEL_DIR = os.path.join(BASE_DIR, "label_2")
-CALIB_DIR = os.path.join(BASE_DIR, "calib")
+# 4. 학습된 모델을 저장할 경로
+MODEL_OUTPUT_PATH = 'random_forest_model_from_csv.joblib'
 
-MODEL_SAVE_PATH = "advanced_model.joblib"
-MAPPING_SAVE_PATH = "advanced_class_mapping.json"
-IOU_THRESHOLD = 0.3
-VISUALIZE_MATCHING = True
-VISUALIZATION_OUTPUT_DIR = "training_visualizations_a2d2"
 
-CLASS_MAPPING = {
-    'Car': 0, 'Pedestrian': 1, 'Truck': 2, 'Cyclist': 3, 'Bicycle': 4,
-    'Bus': 5, 'UtilityVehicle': 6, 'Trailer': 7, 'MotorBiker': 8, 'Background': 9
-}
-BEV_X_RANGE, BEV_Y_RANGE, BEV_RESOLUTION, MIN_CLUSTER_AREA = (0, 70.4), (-40, 40), 0.1, 15
-# ======================================================================
-
-def process_file(bin_name):
-    """단일 .bin 파일을 처리하는 작업자 함수 (KITTI 기준)"""
+# --- [추가] 헬퍼 함수: txt 파일에서 프레임 ID 로드 ---
+def load_frame_ids(file_path):
+    """
+    .txt 파일에서 프레임 ID 목록을 읽어와 set으로 반환합니다.
+    프레임 ID는 000057177과 같은 형식을 유지하기 위해 문자열로 처리합니다.
+    """
     try:
-        # --- 0. 파일 경로 준비 ---
-        file_name_base = os.path.splitext(bin_name)[0]
-        bin_path = os.path.join(BIN_DATA_DIR, f"{file_name_base}.bin")
-        label_path = os.path.join(LABEL_DIR, f"{file_name_base}.txt")
-        calib_path = os.path.join(CALIB_DIR, f"{file_name_base}.txt")
-
-        if not (os.path.exists(label_path) and os.path.exists(calib_path)): return None
-
-        # --- 1. 파이프라인 실행: 클러스터 후보 생성 ---
-        pcd = read_kitti_bin(bin_path)
-        original_points = np.asarray(pcd.points)
-        if original_points.shape[0] == 0: return None
-
-        non_ground_points = remove_ground_open3d(original_points)
-        if non_ground_points.shape[0] == 0: return None
-        
-        bev_image = pointcloud_to_bev(points=non_ground_points, x_range=BEV_X_RANGE, y_range=BEV_Y_RANGE, resolution=BEV_RESOLUTION)
-        if bev_image is None: return None
-
-        kernel = np.ones((3, 3), np.uint8)
-        processed_bev_image = cv2.morphologyEx(bev_image, cv2.MORPH_CLOSE, kernel)
-        
-        clusters, _ = cluster_bev_image(processed_bev_image, min_area_threshold=MIN_CLUSTER_AREA)
-        if not clusters: return None
-
-        # --- 2. 정답(GT) 박스 로드 (rf_gt_utils 사용) ---
-        gt_boxes_with_corners = get_a2d2_gt_boxes(label_path, calib_path, BEV_X_RANGE, BEV_Y_RANGE, BEV_RESOLUTION)
-        if not gt_boxes_with_corners: return None
-        
-        # --- 3. 클러스터로부터 특징 추출 ---
-        valid_clusters, features_from_clusters = extract_features_from_clusters(
-            clusters, BEV_RESOLUTION, non_ground_points, BEV_X_RANGE, BEV_Y_RANGE
-        )
-        if features_from_clusters.shape[0] == 0: return None
-
-        # --- 4. IoU 기반 자동 라벨링 ---
-        file_features, file_labels, clusters_for_vis = [], [], []
-        for i, cluster_box in enumerate(valid_clusters):
-            best_iou, best_gt_class_id = 0.0, -1
-            for gt in gt_boxes_with_corners:
-                gt_aligned_box = cv2.boundingRect(gt['corners'])
-                iou = calculate_iou(cluster_box, gt_aligned_box)
-                if iou > best_iou:
-                    gt_class_str = gt['class']
-                    if gt_class_str in ['Van']: gt_class_str = 'Car' # KITTI 클래스 통합
-                    
-                    if gt_class_str in CLASS_MAPPING:
-                        best_iou, best_gt_class_id = iou, CLASS_MAPPING[gt_class_str]
-
-            label_to_assign = CLASS_MAPPING['Background']
-            if best_iou >= IOU_THRESHOLD:
-                label_to_assign = best_gt_class_id
-            
-            file_features.append(features_from_clusters[i])
-            file_labels.append(label_to_assign)
-            clusters_for_vis.append({'box': cluster_box, 'label': label_to_assign})
-
-        # --- 5. 최종 결과 반환 ---
-        return {
-            "bin_name": bin_name, "bev_image": processed_bev_image,
-            "gt_boxes": gt_boxes_with_corners, "clusters_for_vis": clusters_for_vis,
-            "features": file_features, "labels": file_labels
-        }
-    except Exception:
-        return None
+        with open(file_path, 'r') as f:
+            # 양쪽 공백을 제거하고, 비어있지 않은 라인만 set에 추가
+            frame_ids = {line.strip() for line in f if line.strip()}
+        return frame_ids
+    except FileNotFoundError:
+        print(f"❗️ Error: '{file_path}' 파일을 찾을 수 없습니다. 파일 경로를 확인해주세요.")
+        exit()
+# --- [추가] ---
 
 
-def train_classifier():
-    if VISUALIZE_MATCHING:
-        os.makedirs(VISUALIZATION_OUTPUT_DIR, exist_ok=True)
-    reverse_mapping = {v: k for k, v in CLASS_MAPPING.items()}
+# --- 1. 데이터 로드 및 전처리 ---
+print(f"'{TRAINING_DATA_PATH}' 파일에서 전체 데이터를 로드합니다...")
+try:
+    # [수정] FRAME_ID_COLUMN을 문자열(str) 타입으로 읽어오도록 강제합니다.
+    # 이렇게 하면 '000057177' 같은 ID가 숫자로 변환되지 않습니다.
+    df = pd.read_csv(TRAINING_DATA_PATH, dtype={FRAME_ID_COLUMN: str})
+except FileNotFoundError:
+    print(f"❗️ Error: '{TRAINING_DATA_PATH}' 파일을 찾을 수 없습니다. 파일 경로를 확인해주세요.")
+    exit()
+except ValueError as e:
+    print(f"❗️ Error: '{FRAME_ID_COLUMN}' 컬럼을 찾을 수 없거나 dtype이 맞지 않습니다. ({e})")
+    print(f"'{FRAME_ID_COLUMN}' 변수가 CSV의 실제 프레임 ID 컬럼명과 일치하는지 확인하세요.")
+    exit()
 
-    all_features, all_labels = [], []
-    bin_files = sorted([f for f in os.listdir(BIN_DATA_DIR) if f.endswith(".bin")])
+# 누락된 값이 있는 행이 있다면 제거합니다.
+df.dropna(inplace=True)
 
-    # --- 병렬 처리 ---
-    num_processes = cpu_count() - 1 if cpu_count() > 1 else 1
-    print(f"{num_processes}개의 프로세스를 사용하여 병렬 처리를 시작합니다...")
-    with Pool(processes=num_processes) as pool:
-        results = list(tqdm(pool.imap_unordered(process_file, bin_files), total=len(bin_files), desc="학습 데이터 생성 중"))
+# [수정] 'frame_id' 컬럼이 있는지 확인
+if FRAME_ID_COLUMN not in df.columns:
+    print(f"❗️ Error: CSV 파일에 '{FRAME_ID_COLUMN}' 컬럼이 없습니다.")
+    print(f"'{FRAME_ID_COLUMN}' 변수를 실제 프레임 ID가 포함된 컬럼 이름으로 수정해주세요.")
+    exit()
 
-    # --- 결과 취합 & 시각화 ---
-    print("\n결과 취합 및 시각화 이미지 저장 중...")
-    for result in tqdm(results, desc="결과 처리 중"):
-        if result is None: continue
-        all_features.extend(result["features"])
-        all_labels.extend(result["labels"])
+# [수정] 라벨 인코더는 *전체* 데이터셋(df)을 기준으로 fit합니다.
+# (그래야 train/test에 특정 클래스가 없더라도 모든 클래스를 인식할 수 있습니다)
+label_encoder = LabelEncoder()
+label_encoder.fit(df['class'])
 
-        if VISUALIZE_MATCHING:
-            vis_image = cv2.cvtColor(result["bev_image"], cv2.COLOR_GRAY2BGR)
-            for gt in result["gt_boxes"]:
-                # 회전된 GT 박스 그리기
-                cv2.drawContours(vis_image, [gt['corners'].astype(np.int32)], -1, (0, 255, 0), 1)
-            for cluster in result["clusters_for_vis"]:
-                x, y, w, h = cluster['box']
-                label_int = cluster['label']
-                class_name = reverse_mapping.get(label_int, "Unknown")
-                color = (0, 0, 255) if class_name == 'Background' else (255, 0, 0)
-                cv2.rectangle(vis_image, (x, y), (x + w, y + h), color, 2)
-                cv2.putText(vis_image, class_name, (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
-            save_path = os.path.join(VISUALIZATION_OUTPUT_DIR, f"{os.path.splitext(result['bin_name'])[0]}.png")
-            cv2.imwrite(save_path, vis_image)
-
-    # --- 모델 학습 및 평가 ---
-    if not all_features:
-        print("❗️ Error: 생성된 학습 데이터가 없습니다. 경로 및 파라미터를 확인하세요.")
-        return
-        
-    X = np.array(all_features)
-    y = np.array(all_labels)
-    
-    print("\n" + "="*40)
-    print("클래스별 데이터 개수:")
-    for label_int, count in sorted(Counter(y).items()):
-        print(f"- {reverse_mapping.get(label_int, 'Unknown')}: {count}개")
-    print("="*40)
-
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
-
-    print("\nRandomForest 모델 학습을 시작합니다...")
-    model = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1, verbose=10)
-    model.fit(X_train, y_train)
-    print("✅ 모델 학습 완료.")
-
-    y_pred = model.predict(X_test)
-    print("\n" + "="*40)
-    print("📊 모델 성능 평가 리포트:")
-    print(classification_report(y_test, y_pred, labels=list(CLASS_MAPPING.values()), target_names=list(CLASS_MAPPING.keys()), zero_division=0))
-    print("="*40)
-
-    # --- 모델 및 매핑 정보 저장 ---
-    joblib.dump(model, MODEL_SAVE_PATH)
-    with open(MAPPING_SAVE_PATH, 'w') as f:
-        json.dump(CLASS_MAPPING, f, indent=4)
-        
-    print(f"✅ 모델 저장 완료: {MODEL_SAVE_PATH}")
-    print(f"✅ 클래스 맵 저장 완료: {MAPPING_SAVE_PATH}")
+class_mapping = {index: label for index, label in enumerate(label_encoder.classes_)}
+print("✅ 전체 데이터 로드 및 라벨 인코딩 완료.")
+print("\n클래스 매핑 정보 (숫자 -> 이름):")
+print(class_mapping)
 
 
-if __name__ == '__main__':
-    # Python의 multiprocessing을 안전하게 사용하기 위해 필수적인 구문
-    train_classifier()
+# --- 2. 데이터셋 분리 (train_test_split 대체) ---
+print(f"\n'{TRAIN_FILE_PATH}'와 '{VAL_FILE_PATH}'를 기준으로 데이터를 분리합니다...")
+train_ids = load_frame_ids(TRAIN_FILE_PATH)
+val_ids = load_frame_ids(VAL_FILE_PATH)
+print(f"학습용 ID {len(train_ids)}개, 테스트용 ID {len(val_ids)}개를 로드했습니다.")
+
+# [수정] train.txt와 val.txt의 ID를 기준으로 DataFrame 필터링
+train_df = df[df[FRAME_ID_COLUMN].isin(train_ids)]
+test_df = df[df[FRAME_ID_COLUMN].isin(val_ids)]
+
+if len(train_df) == 0:
+    print(f"❗️ Error: '{TRAIN_FILE_PATH}'의 ID와 일치하는 데이터가 CSV에 없습니다.")
+    exit()
+if len(test_df) == 0:
+    print(f"❗️ Error: '{VAL_FILE_PATH}'의 ID와 일치하는 데이터가 CSV에 없습니다.")
+    exit()
+
+# [수정] X, y 분리
+# 'class'와 'frame_id' 컬럼을 제외한 모든 열을 특징으로 사용합니다.
+feature_columns = [col for col in df.columns if col not in ['class', FRAME_ID_COLUMN]]
+
+X_train = train_df[feature_columns]
+y_train_str = train_df['class']
+
+X_test = test_df[feature_columns]
+y_test_str = test_df['class']
+
+# 위에서 fit한 라벨 인코더를 사용하여 문자열 라벨을 숫자로 변환
+y_train = label_encoder.transform(y_train_str)
+y_test = label_encoder.transform(y_test_str)
+
+print(f"\n총 {len(train_df)}개의 데이터를 학습에, {len(test_df)}개의 데이터를 테스트에 사용합니다.")
+print("\n학습 데이터 클래스 분포:")
+print(sorted(Counter(y_train).items()))
+print("\n테스트 데이터 클래스 분포:")
+print(sorted(Counter(y_test).items()))
+
+
+# --- 3. 랜덤 포레스트 모델 학습 ---
+print("\nRandomForest 모델 학습을 시작합니다...")
+# n_jobs=-1: 컴퓨터의 모든 CPU 코어를 사용하여 학습 속도를 높입니다.
+# verbose=1: 학습 과정을 간략하게 출력합니다.
+model = RandomForestClassifier(
+    n_estimators=100, # 100개의 의사결정 나무를 사용
+    random_state=42, # 난수를 고정해 결과를 재현 가능하게 만듦
+    n_jobs=-1,
+    verbose=1
+)
+model.fit(X_train, y_train)
+print("✅ 모델 학습 완료.")
+
+
+# --- 4. 모델 성능 평가 ---
+print(f"\n테스트 데이터({VAL_FILE_PATH} 기준)로 모델 성능을 평가합니다...")
+y_pred = model.predict(X_test)
+
+# --- ▼▼▼▼▼ 수정 시작 ▼▼▼▼▼ ---
+# 성능 평가 리포트를 딕셔너리로 받음
+report_dict = classification_report(y_test, y_pred, target_names=label_encoder.classes_, output_dict=True, zero_division=0)
+
+print("\n" + "="*65) # 구분선 길이 조정
+print("📊 모델 성능 평가 리포트 (퍼센트 형식)")
+# 헤더 출력 (정렬 맞춤)
+print(f"{'Class':<16} | {'Precision':>10} | {'Recall':>10} | {'F1-Score':>10} | {'Support':>7}")
+print("-" * 65) # 구분선 길이 조정
+
+# 각 클래스별 결과 포맷팅 및 출력
+for class_name, metrics in report_dict.items():
+    # 클래스 이름인 경우에만 처리 (accuracy, macro avg 등 제외)
+    if class_name in label_encoder.classes_:
+        precision = metrics['precision']
+        recall = metrics['recall']
+        f1_score = metrics['f1-score']
+        support = metrics['support']
+
+        # 퍼센트 형식으로 포맷팅 (소수점 둘째 자리까지)
+        precision_str = f"{precision * 100:.2f}%"
+        recall_str = f"{recall * 100:.2f}%"
+        f1_score_str = f"{f1_score:.4f}" # F1은 보통 비율로 표시
+
+        print(f"{class_name:<16} | {precision_str:>10} | {recall_str:>10} | {f1_score_str:>10} | {support:>7}")
+
+# 요약 정보(accuracy, macro avg, weighted avg) 출력 (선택 사항)
+print("-" * 65)
+if 'accuracy' in report_dict:
+     accuracy_str = f"{report_dict['accuracy'] * 100:.2f}%"
+     # accuracy 행 포맷팅 (Precision/Recall 자리는 비워둠)
+     total_support = report_dict['weighted avg']['support'] # 전체 샘플 수
+     print(f"{'accuracy':<16} | {'':>10} | {'':>10} | {accuracy_str:>10} | {total_support:>7}")
+
+if 'macro avg' in report_dict:
+    metrics = report_dict['macro avg']
+    precision_str = f"{metrics['precision'] * 100:.2f}%"
+    recall_str = f"{metrics['recall'] * 100:.2f}%"
+    f1_score_str = f"{metrics['f1-score']:.4f}"
+    support = metrics['support']
+    print(f"{'macro avg':<16} | {precision_str:>10} | {recall_str:>10} | {f1_score_str:>10} | {support:>7}")
+
+if 'weighted avg' in report_dict:
+    metrics = report_dict['weighted avg']
+    precision_str = f"{metrics['precision'] * 100:.2f}%"
+    recall_str = f"{metrics['recall'] * 100:.2f}%"
+    f1_score_str = f"{metrics['f1-score']:.4f}"
+    support = metrics['support']
+    print(f"{'weighted avg':<16} | {precision_str:>10} | {recall_str:>10} | {f1_score_str:>10} | {support:>7}")
+
+print("="*65)
+# --- ▲▲▲▲▲ 수정 끝 ▲▲▲▲▲ ---
+
+# # 성능 평가 리포트 출력 (정확도, 정밀도, 재현율 등)
+# print("\n" + "="*50)
+# print("📊 모델 성능 평가 리포트")
+# print(classification_report(y_test, y_pred, target_names=label_encoder.classes_))
+# print("="*50)
+
+# Confusion Matrix 시각화
+print("\n 정규화된 혼동 행렬(Confusion Matrix)을 시각화합니다. (행 기준, Recall)")
+cm = confusion_matrix(y_test, y_pred, normalize='pred')
+plt.figure(figsize=(10, 8))
+sns.heatmap(cm, annot=True, fmt='.2%', cmap='Blues', xticklabels=label_encoder.classes_, yticklabels=label_encoder.classes_)
+plt.title(f'Confusion Matrix (Test Set: {VAL_FILE_PATH})')
+plt.ylabel('Actual Class')
+plt.xlabel('Predicted Class')
+plt.show()
+
+
+# --- 5. 학습된 모델 저장 ---
+print(f"\n학습된 모델을 '{MODEL_OUTPUT_PATH}' 파일로 저장합니다...")
+joblib.dump(model, MODEL_OUTPUT_PATH)
+joblib.dump(label_encoder, 'label_encoder.joblib') # 라벨 인코더도 함께 저장해야 나중에 예측 결과를 해석할 수 있습니다.
+print("✅ 모델 저장이 완료되었습니다. 이제 이 파일을 사용하여 새로운 데이터의 클래스를 예측할 수 있습니다.")

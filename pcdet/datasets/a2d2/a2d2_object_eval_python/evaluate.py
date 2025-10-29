@@ -3,7 +3,7 @@ import time
 import fire
 
 import pcdet.datasets.a2d2.a2d2_object_eval_python.a2d2_common as kitti
-from .eval import get_coco_eval_result, get_official_eval_result
+from eval import get_coco_eval_result, get_official_eval_result
 
 
 def _read_imageset_file(path):

@@ -9,17 +9,16 @@ import matplotlib
 import numpy as np
 
 box_colormap = [
-    [1, 1, 1],      # 0: DontCare (흰색)
+    [1, 1, 1],      # 0: DontCare / Background (흰색)
     [0, 1, 0],      # 1: Car (초록)
-    [0, 1, 1],      # 2: Pedestrian (청록)
-    [1, 1, 0],      # 3: Cyclist (노랑)
-    [1, 0, 0],      # 4: Truck (빨강)
-    [0, 0, 1],      # 5: UtilityVehicle (파랑)
-    [1, 0, 1],      # 6: Bicycle (마젠타)
-    [0.5, 0, 0.5],  # 7: MotorBiker (보라)
-    [0, 0.5, 0.5],  # 8: Bus (어두운 청록)
-    [0.5, 0.5, 0],  # 9: Trailer (올리브)
-    [1, 0.5, 0],    # 10: 여분 색상 (주황)
+    [1, 0, 0],      # 2: Truck (빨강)
+    [0, 0, 1],      # 3: UtilityVehicle (파랑)
+    [1, 1, 0],      # 4: Cyclist (노랑)
+    [0, 0.5, 0.5],  # 5: Bus (어두운 청록)
+    [0.5, 0.5, 0],  # 6: Trailer (올리브/갈색 계열)
+    [0, 1, 1],      # 7: Pedestrian (청록/하늘색 계열)
+    #[0.5, 0.5, 0],  # 8: (올리브)
+    #[0, 1, 1],      # 9:  (청록)
 ]
 
 

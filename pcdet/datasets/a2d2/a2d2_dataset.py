@@ -410,6 +410,7 @@ class A2D2Dataset(DatasetTemplate):
         eval_det_annos = copy.deepcopy(det_annos)
         eval_gt_annos = [copy.deepcopy(info['annos']) for info in self.a2d2_infos]
         ap_result_str, ap_dict = a2d2_eval.get_official_eval_result(eval_gt_annos, eval_det_annos, class_names)
+        
 
         return ap_result_str, ap_dict
 
@@ -569,7 +570,8 @@ if __name__ == '__main__':
         ROOT_DIR = (Path(__file__).resolve().parent / '../../../').resolve()
         create_a2d2_infos(
             dataset_cfg=dataset_cfg,
-            class_names=['Car','Truck','UtilityVehicle','Cyclist','Bicycle','MotorBiker','Bus','Trailer','Pedestrian'],
+            #class_names=['Car','Truck','UtilityVehicle','Cyclist','Bicycle','MotorBiker','Bus','Trailer','Pedestrian'],
+            class_names=['Car','Truck','UtilityVehicle','Cyclist','Bus','Trailer','Pedestrian'],
             data_path=ROOT_DIR / 'data' / 'a2d2',
             save_path=ROOT_DIR / 'data' / 'a2d2'
         )

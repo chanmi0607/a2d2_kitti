@@ -1,4 +1,5 @@
-CLASS_NAMES: ['Car','Truck','UtilityVehicle','Cyclist','Bicycle','MotorBiker','Bus','Trailer','Pedestrian']
+# CLASS_NAMES: ['Car','Truck','UtilityVehicle','Cyclist','Bicycle','MotorBiker','Bus','Trailer','Pedestrian']
+CLASS_NAMES: ['Car','Truck','UtilityVehicle','Cyclist','Bus','Trailer','Pedestrian']
 #CLASS_NAMES: ['Car','Cyclist','Pedestrian']
 
 DATASET: 'A2D2Dataset'
@@ -28,12 +29,14 @@ DATA_AUGMENTOR:
               - /home/a/OpenPCDet/data/a2d2/a2d2_dbinfos_train.pkl
           PREPARE: {
              # 각 클래스별 최소 포인트 수를 지정해 너무 작은 객체는 제외
-             filter_by_min_points: ['Car:5', 'Pedestrian:5', 'Bicycle:5', 'Truck:5', 'UtilityVehicle:5', 'MotorBiker:5', 'Bus:5', 'Trailer:5', 'Cyclist:5'],
+            #  filter_by_min_points: ['Car:5', 'Pedestrian:5', 'Bicycle:5', 'Truck:5', 'UtilityVehicle:5', 'MotorBiker:5', 'Bus:5', 'Trailer:5', 'Cyclist:5'],
+             filter_by_min_points: ['Car:5', 'Pedestrian:5', 'Truck:5', 'UtilityVehicle:5', 'Bus:5', 'Trailer:5', 'Cyclist:5'],
              filter_by_difficulty: [-1],
           }
 
           # 각 클래스 별 샘플링 개수 지정
-          SAMPLE_GROUPS: ['Car:20','Pedestrian:10', 'Bicycle:10', 'Truck:10', 'UtilityVehicle:5', 'MotorBiker:5', 'Bus:10', 'Trailer:5', 'Cyclist:5']
+          # SAMPLE_GROUPS: ['Car:20','Pedestrian:10', 'Bicycle:10', 'Truck:10', 'UtilityVehicle:5', 'MotorBiker:5', 'Bus:10', 'Trailer:5', 'Cyclist:5']
+          SAMPLE_GROUPS: ['Car:20','Pedestrian:10', 'Truck:10', 'UtilityVehicle:5', 'Bus:10', 'Trailer:5', 'Cyclist:5']
           NUM_POINT_FEATURES: 4
           DATABASE_WITH_FAKELIDAR: False
           REMOVE_EXTRA_WIDTH: [0.0, 0.0, 0.0]

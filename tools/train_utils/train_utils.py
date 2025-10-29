@@ -4,11 +4,13 @@ import torch
 import tqdm
 import time
 import glob
+import shutil
 
 import numpy as np
 
 from torch.nn.utils import clip_grad_norm_
 from pcdet.utils import common_utils, commu_utils
+from tools.test import eval_single_ckpt
 
 
 def train_one_epoch(model, optimizer, train_loader, model_func, lr_scheduler, accumulated_iter, optim_cfg,
@@ -222,8 +224,11 @@ def train_model(model, optimizer, train_loader, model_func, lr_scheduler, optim_
                 start_epoch, total_epochs, start_iter, rank, tb_log, ckpt_save_dir, train_sampler=None,
                 lr_warmup_scheduler=None, ckpt_save_interval=1, max_ckpt_save_num=50,
                 merge_all_iters_to_one_epoch=False, use_amp=False,
-                use_logger_to_record=False, logger=None, logger_iter_interval=None, ckpt_save_time_interval=None, show_gpu_stat=False, cfg=None):
+                use_logger_to_record=False, logger=None, logger_iter_interval=None, ckpt_save_time_interval=None, show_gpu_stat=False, cfg=None, test_loader=None, args=None):
     accumulated_iter = start_iter
+
+    best_metric = -1.0
+    best_epoch = -1
 
     # use for disable data augmentation hook
     hook_config = cfg.get('HOOK', None) 
@@ -280,6 +285,61 @@ def train_model(model, optimizer, train_loader, model_func, lr_scheduler, optim_
                 save_checkpoint(
                     checkpoint_state(model, optimizer, trained_epoch, accumulated_iter), filename=ckpt_name,
                 )
+            
+            ckpt_name = ckpt_save_dir / (f'checkpoint_epoch_{trained_epoch}')
+            save_checkpoint(checkpoint_state(model, optimizer, trained_epoch, accumulated_iter), filename=ckpt_name)
+
+            if test_loader is not None and rank == 0:
+                logger.info(f'********************** Start evaluation on epoch {trained_epoch} **********************')
+                output_dir = ckpt_save_dir.parent
+                eval_output_dir = output_dir / 'eval' / f'eval_epoch_{trained_epoch}'
+                eval_output_dir.mkdir(parents=True, exist_ok=True)
+
+                model_to_eval = model.module if hasattr(model, 'module') else model
+
+                ret_dict, _ = eval_single_ckpt(
+                    model_to_eval, test_loader, args, eval_output_dir, logger, trained_epoch
+                )
+
+                # 성능 지표 키를 유연하게 찾기
+                key_metric = None
+                possible_keys = ['Car_3d/moderate_R40', 'mAP']
+                for key in possible_keys:
+                    if key in ret_dict:
+                        key_metric = key
+                        break
+                
+                if key_metric is None and ret_dict: # 그래도 못 찾으면 첫번째 키 사용
+                    key_metric = list(ret_dict.keys())[0]
+
+                if key_metric:
+                    current_metric = ret_dict.get(key_metric, 0)
+                    logger.info(f'==> Epoch {trained_epoch} Metric ({key_metric}): {current_metric:.4f}')
+
+                    # 최고 성능 모델인지 확인하고 저장
+                    if current_metric > best_metric:
+                        best_metric = current_metric
+                        best_epoch = trained_epoch
+                        logger.info(f'==> New best model found at epoch {best_epoch} with metric {best_metric:.4f}!')
+
+                        # 기존 best_model 파일 삭제
+                        old_best_files = glob.glob(str(output_dir / 'best_model_epoch_*.pth'))
+                        for f in old_best_files:
+                            os.remove(f)
+
+                        # 새 best_model 파일 복사
+                        cur_ckpt_path = ckpt_save_dir / f'checkpoint_epoch_{trained_epoch}.pth'
+                        best_ckpt_name = f'best_model_epoch_{best_epoch}.pth'
+                        dest_path = output_dir / best_ckpt_name
+                        shutil.copyfile(cur_ckpt_path, dest_path)
+                        logger.info(f'==> Saved current best checkpoint to: {dest_path}')
+                else:
+                    logger.warning(f"==> Epoch {trained_epoch}: Evaluation failed or could not find a key metric.")
+
+                logger.info(f'********************** End evaluation on epoch {trained_epoch} **********************')
+
+    if rank == 0 and best_epoch != -1:
+        logger.info(f"############### Final Best Model: Epoch={best_epoch}, Metric={best_metric:.4f} ###############")
 
 
 def model_state_to_cpu(model_state):

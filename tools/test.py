@@ -55,17 +55,78 @@ def parse_config():
     return args, cfg
 
 
-def eval_single_ckpt(model, test_loader, args, eval_output_dir, logger, epoch_id, dist_test=False):
-    # load checkpoint
-    model.load_params_from_file(filename=args.ckpt, logger=logger, to_cpu=dist_test, 
-                                pre_trained_path=args.pretrained_model)
-    model.cuda()
+# def eval_single_ckpt(model, test_loader, args, eval_output_dir, logger, epoch_id, dist_test=False):
+#     # load checkpoint
+#     model.load_params_from_file(filename=args.ckpt, logger=logger, to_cpu=dist_test, 
+#                                 pre_trained_path=args.pretrained_model)
+#     model.cuda()
     
-    # start evaluation
-    eval_utils.eval_one_epoch(
+#     # start evaluation
+#     eval_utils.eval_one_epoch(
+#         cfg, args, model, test_loader, epoch_id, logger, dist_test=dist_test,
+#         result_dir=eval_output_dir
+#     )
+
+# def eval_single_ckpt(model, test_loader, args, eval_output_dir, logger, epoch_id, dist_test=False):
+#     # Load specified model
+#     # if args.ckpt is not None:  # <--- [수정] 이 if 블록 전체를 주석 처리하거나 삭제합니다.
+#     #     model.load_params_from_file(filename=args.ckpt, logger=logger, to_cpu=dist_test)
+#     #     model.cuda()
+
+#     # start evaluation
+#     eval_utils.eval_one_epoch(
+#         cfg, args, model, test_loader, epoch_id, logger, dist_test=dist_test,
+#         result_dir=eval_output_dir
+#     )
+
+#     # [수정] eval_one_epoch이 성능 딕셔너리를 직접 반환하지 않으므로,
+#     # 결과 파일에서 읽어오는 로직을 추가합니다.
+#     #metric_file = eval_output_dir / f'epoch_{epoch_id}' / 'eval_all_default' / 'result.txt'
+#     metric_file = eval_output_dir / 'eval_all_default' / 'result.txt'
+#     ret_dict = {}
+#     if metric_file.exists():
+#         with open(metric_file, 'r') as f:
+#             for line in f:
+#                 if ' : ' in line:
+#                     key, val = line.strip().split(' : ')
+#                     try:
+#                         ret_dict[key] = float(val)
+#                     except ValueError:
+#                         pass # float 변환 실패 시 무시
+
+#     return ret_dict, None
+def eval_single_ckpt(model, test_loader, args, eval_output_dir, logger, epoch_id, dist_test=False):
+    """
+    Evaluate a single checkpoint and return the metric dictionary.
+    """
+    # 1️⃣ 실제 평가 실행 (결과 파일 저장)
+    tb_dict = eval_utils.eval_one_epoch(
         cfg, args, model, test_loader, epoch_id, logger, dist_test=dist_test,
         result_dir=eval_output_dir
     )
+
+    # 2️⃣ tb_dict가 비어있지 않다면 그대로 반환
+    if tb_dict and isinstance(tb_dict, dict) and len(tb_dict) > 0:
+        logger.info(f"==> Eval metrics returned from eval_one_epoch: {list(tb_dict.keys())}")
+        return tb_dict, None
+
+    # 3️⃣ 혹시 tb_dict가 비어있다면 result.pkl에서 metric 직접 계산 시도
+    result_path = eval_output_dir / 'result.pkl'
+    ret_dict = {}
+    if result_path.exists():
+        try:
+            import pickle
+            with open(result_path, 'rb') as f:
+                results = pickle.load(f)
+            logger.info(f"==> Loaded {len(results)} detection results for metric fallback.")
+            # TODO: 여기에 mAP 계산 함수가 연결되어야 하지만, 일단 기본 구조 유지
+            ret_dict = {'num_detections': len(results)}
+        except Exception as e:
+            logger.warning(f"[WARNING] Could not read result.pkl: {e}")
+    else:
+        logger.warning(f"[WARNING] No result.pkl found in {eval_output_dir}")
+
+    return ret_dict, None
 
 
 def get_no_evaluated_ckpt(ckpt_dir, ckpt_record_file, args):

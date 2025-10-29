@@ -1,4 +1,5 @@
-CLASS_NAMES: ['Car','Truck','UtilityVehicle','Cyclist','Bicycle','MotorBiker','Bus','Trailer','Pedestrian']
+CLASS_NAMES: ['Car','Truck','UtilityVehicle','Cyclist','Bus','Trailer','Pedestrian']
+#CLASS_NAMES: ['Car','Truck','UtilityVehicle','Cyclist','Bicycle','MotorBiker','Bus','Trailer','Pedestrian']
 #CLASS_NAMES: ['Car','Cyclist','Pedestrian']
 
 DATA_CONFIG:
@@ -77,16 +78,16 @@ MODEL:
                 'matched_threshold': 0.5,
                 'unmatched_threshold': 0.35
             },
-            {
-                'class_name': 'Bicycle',
-                'anchor_sizes': [[1.65, 0.65, 1.52]],
-                'anchor_rotations': [0, 1.57],
-                'anchor_bottom_heights': [0],
-                'align_center': False,
-                'feature_map_stride': 8,
-                'matched_threshold': 0.5,
-                'unmatched_threshold': 0.35
-            },
+            # {
+            #     'class_name': 'Bicycle',
+            #     'anchor_sizes': [[1.65, 0.65, 1.52]],
+            #     'anchor_rotations': [0, 1.57],
+            #     'anchor_bottom_heights': [0],
+            #     'align_center': False,
+            #     'feature_map_stride': 8,
+            #     'matched_threshold': 0.5,
+            #     'unmatched_threshold': 0.35
+            # },
             # --- 추가된 클래스들 ---
             {
                 'class_name': 'UtilityVehicle',
@@ -98,16 +99,16 @@ MODEL:
                 'matched_threshold': 0.5,
                 'unmatched_threshold': 0.35
             },
-            {
-                'class_name': 'MotorBiker',
-                'anchor_sizes': [[2.12, 0.92, 1.67]],
-                'anchor_rotations': [0, 1.57],
-                'anchor_bottom_heights': [0],
-                'align_center': False,
-                'feature_map_stride': 8,
-                'matched_threshold': 0.5,
-                'unmatched_threshold': 0.35
-            },
+            # {
+            #     'class_name': 'MotorBiker',
+            #     'anchor_sizes': [[2.12, 0.92, 1.67]],
+            #     'anchor_rotations': [0, 1.57],
+            #     'anchor_bottom_heights': [0],
+            #     'align_center': False,
+            #     'feature_map_stride': 8,
+            #     'matched_threshold': 0.5,
+            #     'unmatched_threshold': 0.35
+            # },
             {
                 'class_name': 'Bus',
                 'anchor_sizes': [[8.52, 2.96, 3.09]],
@@ -156,14 +157,14 @@ MODEL:
         NMS_CONFIG:
             MULTI_CLASSES_NMS: False
             NMS_TYPE: nms_gpu
-            NMS_THRESH: 0.01
+            NMS_THRESH: 0.1
             NMS_PRE_MAXSIZE: 4096
             NMS_POST_MAXSIZE: 500
 
 
 OPTIMIZATION:
-    BATCH_SIZE_PER_GPU: 4
-    NUM_EPOCHS: 500
+    BATCH_SIZE_PER_GPU: 1
+    NUM_EPOCHS: 200
 
     OPTIMIZER: adam_onecycle
     LR: 0.003

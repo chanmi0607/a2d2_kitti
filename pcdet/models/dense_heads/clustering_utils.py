@@ -44,9 +44,9 @@ def cluster_bev_image(
             clusters.append((x, y, w, h))
             
             # 5. 시각화 이미지에 바운딩 박스 그리기 (초록색)
-            cv2.rectangle(visual_image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-            # 클러스터 번호 표시 (파란색)
-            cv2.putText(visual_image, str(i), (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 
-                        0.5, (255, 0, 0), 1)
+            #cv2.rectangle(visual_image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            # # 클러스터 번호 표시 (파란색)
+            # cv2.putText(visual_image, str(i), (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 
+            #             0.5, (255, 0, 0), 1)
 
     return clusters, visual_image

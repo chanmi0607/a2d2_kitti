@@ -6,7 +6,7 @@ def pointcloud_to_bev(
     points: np.ndarray,
     x_range: Tuple[float, float] = (0, 70.4),
     y_range: Tuple[float, float] = (-40, 40),
-    z_range: Tuple[float, float] = (-2.0, 1.0),
+    z_range: Tuple[float, float] = (-3.0, 6.0),
     resolution: float = 0.1
 ) -> Optional[np.ndarray]:
     """
