@@ -153,11 +153,17 @@ MODEL:
         OUTPUT_RAW_SCORE: False
 
         EVAL_METRIC: kitti
+        USE_CASCADE_RF: True
+        RF_OBJECT_THRESH: 0.5
+
+        RF_STAGE1_PATH: 'data/a2d2/rf_stage1_model.pkl'
+        RF_STAGE2_PATH: 'data/a2d2/rf_stage2_model.pkl'
+        RF_STAGE2_ENCODER_PATH: 'data/a2d2/rf_stage2_encoder.pkl'
 
         NMS_CONFIG:
             MULTI_CLASSES_NMS: False
             NMS_TYPE: nms_gpu
-            NMS_THRESH: 0.1
+            NMS_THRESH: 0.5
             NMS_PRE_MAXSIZE: 4096
             NMS_POST_MAXSIZE: 500
 
