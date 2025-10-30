@@ -14,7 +14,8 @@
                 "--cfg_file", "/home/a/OpenPCDet/tools/cfgs/a2d2_models/second.yaml",
                 //"--extra_tag", "a2d2_lidar_only"
                 "--ckpt", "/home/a/OpenPCDet/output/a2d2_models/second/a2d2_cyclist_best/ckpt/checkpoint_epoch_200.pth",
-                "--data_path", "data/a2d2/training/velodyne"
+                "--data_path", "data/a2d2/training/velodyne",
+                //"--data_path", "data/a2d2",
                 //"--gt_path", "/home/a/OpenPCDet/data/a2d2/training/label_2"
                 //"--data_path", "/home/a/kitti_bin/000000091.bin"
             ]

@@ -42,7 +42,7 @@ def parse_config():
                         help='specify the config file')
     
     # --- [수정] data_path 대신 split과 output_csv ---
-    parser.add_argument('--split', type=str, default='val', 
+    parser.add_argument('--split', type=str, default='train', 
                         help='Which data split to process: train or val')
     parser.add_argument('--output_csv', type=str, default=None,
                         help='Path to save the final combined CSV file. (default: rpn_features_[split].csv)')
@@ -56,7 +56,7 @@ def parse_config():
     # --- [추가] Background 라벨링 임계값 ---
     parser.add_argument('--fg_thresh', type=float, default=0.2,
                         help='IoU threshold for a proposal to be "Foreground"')
-    parser.add_argument('--bg_thresh', type=float, default=0.3,
+    parser.add_argument('--bg_thresh', type=float, default=0.5,
                         help='IoU threshold for a proposal to be "Background" (below this value)')
     # ---
     
@@ -75,7 +75,7 @@ def parse_config():
     # cfg.MODEL.POST_PROCESSING.NMS_CONFIG.NMS_THRESH = 0.7
     
     if args.output_csv is None:
-        args.output_csv = f'data/a2d2/background_features_{args.split}.csv'
+        args.output_csv = f'data/a2d2/new_background_features_{args.split}.csv'
     
     return args, cfg
 

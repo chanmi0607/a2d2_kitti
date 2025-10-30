@@ -154,7 +154,10 @@ MODEL:
 
         EVAL_METRIC: kitti
         USE_CASCADE_RF: True
-        RF_OBJECT_THRESH: 0.5
+        RF_OBJECT_THRESH: 0.8
+
+        CREATE_RF_DATASET: False
+        RF_DATASET_SAVE_PATH: 'data/a2d2/rf_new_stage1_training_data.csv'
 
         RF_STAGE1_PATH: 'data/a2d2/rf_stage1_model.pkl'
         RF_STAGE2_PATH: 'data/a2d2/rf_stage2_model.pkl'
@@ -163,7 +166,7 @@ MODEL:
         NMS_CONFIG:
             MULTI_CLASSES_NMS: False
             NMS_TYPE: nms_gpu
-            NMS_THRESH: 0.5
+            NMS_THRESH: 0.4
             NMS_PRE_MAXSIZE: 4096
             NMS_POST_MAXSIZE: 500
 

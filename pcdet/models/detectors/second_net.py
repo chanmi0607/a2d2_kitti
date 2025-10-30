@@ -2,9 +2,11 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 import joblib  # ⭐️ .pkl 파일을 로드하기 위해 추가
+import os
 from ...ops.roiaware_pool3d import roiaware_pool3d_utils # ⭐️ 포인트-박스 매칭용
+from ...ops.iou3d_nms import iou3d_nms_utils
 try:
-    from torch_scatter import scatter_mean, scatter_std # ⭐️ 그룹 통계용
+    from torch_scatter import scatter_mean, scatter_std, scatter_min, scatter_max # ⭐️ 그룹 통계용
 except ImportError:
     print("Warning: torch_scatter not found. Point-based RF features will fail.")
     
@@ -17,13 +19,44 @@ class SECONDNet(Detector3DTemplate):
         super().__init__(model_cfg, num_class, dataset)
         self.module_list = self.build_networks()
 
+        # ⭐️ [추가] Lidar 범위(point_cloud_range)를 클래스 변수로 저장
+        # dataset.point_cloud_range는 [xmin, ymin, zmin, xmax, ymax, zmax]
+        self.point_cloud_range = dataset.point_cloud_range 
+        print(f"[INFO] Loaded Point Cloud Range: {self.point_cloud_range}")
+
         # =================================================================
-        # ⭐️ 1. [수정된 __init__] 설정값 읽기 및 RF 모델 로드
+        #  1. 설정값 읽기 및 RF 모델 로드
         # =================================================================
         post_process_cfg = self.model_cfg.POST_PROCESSING
         self.use_cascade_rf = post_process_cfg.get('USE_CASCADE_RF', False)
 
-        if self.use_cascade_rf:
+        # =================================================================
+        #  데이터 수집 모드 설정
+        # =================================================================
+
+        self.create_rf_dataset = self.model_cfg.get('CREATE_RF_DATASET', False)
+        self.use_cascade_rf = self.model_cfg.POST_PROCESSING.get('USE_CASCADE_RF', False)
+
+        if self.create_rf_dataset:
+            #  데이터 수집 모드
+            self.rf_dataset_save_path = self.model_cfg.get('RF_DATASET_SAVE_PATH', 'temp_rf_data.csv')
+            os.makedirs(os.path.dirname(self.rf_dataset_save_path), exist_ok=True)
+            #  새 .csv 파일 열고, 헤더(컬럼명) 작성
+            # (RF 훈련 스크립트에서 drop했던 'RPN_MaxScore', 'yaw'는 제외하고 16개 + 1개)
+            header = [
+                'x', 'y', 'z', 'l', 'w', 'h', 
+                'num_points', 'length', 'width', 'height', 
+                'density', 'aspect_ratio', 
+                'mean_z', 'std_z', 'intensity_mean', 'intensity_std', 
+                'label' #  정답 라벨
+            ]
+            with open(self.rf_dataset_save_path, 'w') as f:
+                f.write(','.join(header) + '\n')
+            
+            #  [중요] 데이터 수집 중에는 RF 모델 로드 안 함
+            print(f"[INFO] CREATE_RF_DATASET mode is ON. Saving features to {self.rf_dataset_save_path}")
+
+        elif self.use_cascade_rf:
             print("Cascade RandomForest post-processing (2-Stage) is ENABLED.")
             
             # ⭐️ .yaml에 정의된 경로에서 PKL 파일 로드
@@ -35,7 +68,7 @@ class SECONDNet(Detector3DTemplate):
                 raise FileNotFoundError(f"Failed to load RF models. Check paths in YAML. Error: {e}")
 
             # ⭐️ RF 설정값 로드
-            self.rf_obj_thresh = post_process_cfg.get('RF_OBJECT_THRESH', 0.5)
+            self.rf_obj_thresh = post_process_cfg.get('RF_OBJECT_THRESH', 0.9)
             
             # ⭐️ RF 클래스 순서와 OpenPCDet 클래스 순서 매핑
             self.rf_to_openpcdet_class_map = self._map_rf_classes_to_dataset(
@@ -124,6 +157,9 @@ class SECONDNet(Detector3DTemplate):
             std_z = torch.zeros(num_boxes, device=box_preds.device)
             intensity_mean = torch.zeros(num_boxes, device=box_preds.device)
             intensity_std = torch.zeros(num_boxes, device=box_preds.device)
+            length = torch.zeros(num_boxes, device=box_preds.device) # ⭐️ (length)
+            width = torch.zeros(num_boxes, device=box_preds.device)  # ⭐️ (width)
+            height = torch.zeros(num_boxes, device=box_preds.device) # ⭐️ (height)
         else:
             points_batch = cur_points[:, 1:4].unsqueeze(0)
             # ⭐️ [수정] (K, 7) -> (1, K, 7)으로 가짜 배치 차원 추가
@@ -146,17 +182,41 @@ class SECONDNet(Detector3DTemplate):
                 std_z = torch.zeros(num_boxes, device=box_preds.device)
                 intensity_mean = torch.zeros(num_boxes, device=box_preds.device)
                 intensity_std = torch.zeros(num_boxes, device=box_preds.device)
+                length = torch.zeros(num_boxes, device=box_preds.device) # ⭐️ (length)
+                width = torch.zeros(num_boxes, device=box_preds.device)  # ⭐️ (width)
+                height = torch.zeros(num_boxes, device=box_preds.device) # ⭐️ (height)
             else:
                 num_points = torch.bincount(box_indices_fg, minlength=num_boxes).float()[0:num_boxes]
                 
+                point_x = points_in_boxes[:, 1] # (N_fg,)
+                point_y = points_in_boxes[:, 2] # (N_fg,)
                 point_z = points_in_boxes[:, 3] # (N_fg,)
+                point_intensity = points_in_boxes[:, 4] # (N_fg,)
+                
+                # ⭐️ [추가] 박스 내부 점군의 실제 x, y, z min/max 계산
+                min_x_per_box = scatter_min(point_x, box_indices_fg, dim=0, out=torch.full((num_boxes,), float('inf'), device=box_preds.device))[0]
+                max_x_per_box = scatter_max(point_x, box_indices_fg, dim=0, out=torch.full((num_boxes,), float('-inf'), device=box_preds.device))[0]
+                min_y_per_box = scatter_min(point_y, box_indices_fg, dim=0, out=torch.full((num_boxes,), float('inf'), device=box_preds.device))[0]
+                max_y_per_box = scatter_max(point_y, box_indices_fg, dim=0, out=torch.full((num_boxes,), float('-inf'), device=box_preds.device))[0]
+                min_z_per_box = scatter_min(point_z, box_indices_fg, dim=0, out=torch.full((num_boxes,), float('inf'), device=box_preds.device))[0]
+                max_z_per_box = scatter_max(point_z, box_indices_fg, dim=0, out=torch.full((num_boxes,), float('-inf'), device=box_preds.device))[0]
+
+                # ⭐️ [추가] 실제 점군 분포 크기 (length, width, height) 계산
+                # (점이 없는 박스는 inf - (-inf) = inf가 될 수 있으므로, 0으로 마스킹)
+                length = max_x_per_box - min_x_per_box
+                width = max_y_per_box - min_y_per_box
+                height = max_z_per_box - min_z_per_box
+                
+                no_points_mask = (num_points == 0)
+                length[no_points_mask] = 0
+                width[no_points_mask] = 0
+                height[no_points_mask] = 0
+                
+                # (기존) z축 및 intensity 통계
                 mean_z = scatter_mean(point_z, box_indices_fg, dim=0, out=torch.zeros(num_boxes, device=box_preds.device))
                 std_z = scatter_std(point_z, box_indices_fg, dim=0, out=torch.zeros(num_boxes, device=box_preds.device))
-                
-                point_intensity = points_in_boxes[:, 4] # (N_fg,)
                 intensity_mean = scatter_mean(point_intensity, box_indices_fg, dim=0, out=torch.zeros(num_boxes, device=box_preds.device))
                 intensity_std = scatter_std(point_intensity, box_indices_fg, dim=0, out=torch.zeros(num_boxes, device=box_preds.device))
-
         density = num_points / (volume + 1e-6)
 
         # 3. 모든 피처를 (M, 18) 텐서로 결합
@@ -170,9 +230,9 @@ class SECONDNet(Detector3DTemplate):
             dz,               # 7 (h)
             #yaw,              # 8
             num_points,       # 9
-            dx,               # 10 (width) - l, w, h와 중복이지만 리스트 순서대로
-            dy,               # 11 (length)
-            dz,               # 12 (height)
+            length,               # 10 (width) - l, w, h와 중복이지만 리스트 순서대로
+            width,               # 11 (length)
+            height,               # 12 (height)
             density,          # 13
             aspect_ratio,     # 14
             mean_z,           # 15
@@ -195,6 +255,7 @@ class SECONDNet(Detector3DTemplate):
         post_process_cfg = self.model_cfg.POST_PROCESSING
         batch_size = batch_dict['batch_size']
         new_final_cls_preds_list = [] # 최종 RF 점수를 저장할 리스트
+        new_final_box_preds_list = [] # ⭐️ [추가] 필터링된 박스를 저장할 리스트
 
         for index in range(batch_size):
             # 3-3. RPN 결과(박스, 점수) 가져오기
@@ -208,6 +269,40 @@ class SECONDNet(Detector3DTemplate):
 
             if not batch_dict['cls_preds_normalized']:
                 cls_preds_rpn = torch.sigmoid(cls_preds_rpn)
+
+            pcr_tensor = torch.tensor(
+                self.point_cloud_range, dtype=torch.float32, device=box_preds.device
+            )
+            # 2. 박스 중심 좌표 (M, 3)
+            box_centers = box_preds[:, 0:3]
+
+            # 3. 범위 마스크 생성
+            # .all(dim=1)을 사용하여 x,y,z가 *모두* 범위 내에 있는지 확인
+            mask_min = (box_centers >= pcr_tensor[0:3]).all(dim=1)
+            mask_max = (box_centers <= pcr_tensor[3:6]).all(dim=1)
+            
+            # ⭐️ [수정] 필터링 전 박스 수 저장
+            total_boxes_before_filter = box_preds.shape[0]
+
+            range_mask = mask_min & mask_max
+            
+            # 5. [핵심] 범위 내의 박스만 필터링
+            box_preds = box_preds[range_mask]
+            cls_preds_rpn = cls_preds_rpn[range_mask]
+
+            
+
+            # ⭐️ [수정] print 문 수정
+            print(f"[DEBUG] 'Lidar 범위 밖' 필터로 {total_boxes_before_filter - box_preds.shape[0]} 개의 박스가 제거됨.")
+            forward_limit = 30.0
+            mask_forward = box_preds[:, 0] <= forward_limit   # LiDAR x축 기준
+            mask_backward = box_preds[:, 0] >= 0.0            # 후방 박스 제거
+            mask_fov = mask_forward & mask_backward
+
+            num_before = box_preds.shape[0]
+            box_preds = box_preds[mask_fov]
+            cls_preds_rpn = cls_preds_rpn[mask_fov]
+            print(f"[DEBUG] '전방 0~30m' 필터로 {num_before - box_preds.shape[0]}개 박스 제거됨. (남은 {box_preds.shape[0]})")
 
             # 3-4. RF 피처 생성 헬퍼 함수 호출
             features_for_rf = self.create_features_for_rf(
@@ -225,33 +320,60 @@ class SECONDNet(Detector3DTemplate):
             # 3-6. [RF STAGE 1] Object vs Background 예측
             prob_obj_np = self.rf_stage1.predict_proba(features_np)[:, 1] # (M,)
 
-            print(f"\n[DEBUG] RPN이 제안한 총 박스 수: {features_np.shape[0]} 개")
+            # ==========================================================
+            # ⭐️ 점군(point)이 0개인 박스 강제 0점 처리
+            # ==========================================================
+            # 1. 16개 피처 중 7번째(인덱스 6)가 num_points입니다.
+            # (순서: [x, y, z, dx, dy, dz, num_points, ...])
+            num_points_np = features_np[:, 6] 
+            
+            # 2. num_points가 0인 박스 마스크 생성
+            pointless_box_mask_np = (num_points_np <= 1)
+            
+            # 3. [핵심] 해당 박스들의 Stage 1 점수(P(Object))를 0.0으로 강제 할당
+            prob_obj_np[pointless_box_mask_np] = 0.0
+            
+            # 4. (디버깅) 얼마나 많은 박스가 0점 처리되었는지 확인
+            print(f"[DEBUG] '점군 0개' 필터로 {pointless_box_mask_np.sum()} 개의 박스가 0점 처리됨.")
+
+            print(f"\n[DEBUG] LiDAR 범위 내 RPN이 제안한 총 박스 수: {features_np.shape[0]} 개")
             print(f"[DEBUG] RF Stage 1 최고점수 (Top 5): {np.sort(prob_obj_np)[-5:]}")
 
             # 3-7. [RF STAGE 2] Specific Class (Car, Ped, Cyc) 예측
-            object_mask_np = prob_obj_np > self.rf_obj_thresh # (M,)
+            # 3-7. [RF STAGE 1] Specific Class (Car, Ped, Cyc) 예측
+            object_mask_np = prob_obj_np > self.rf_obj_thresh  # (M,)
+
+            # ==========================================================
+            # ⭐ Stage 1 통과 박스만 남기기 (나머지 완전 제거)
+            # ==========================================================
+            keep_mask = torch.from_numpy(object_mask_np).to(box_preds.device)
+
+            box_preds = box_preds[keep_mask]
+            cls_preds_rpn = cls_preds_rpn[keep_mask]
+            features_np = features_np[object_mask_np]
+            prob_obj_np = prob_obj_np[object_mask_np]
+            new_final_box_preds_list.append(box_preds)
 
             print(f"[DEBUG] Stage 1 통과 (>{self.rf_obj_thresh}) 박스 수: {object_mask_np.sum()} 개\n")
 
             final_scores = torch.zeros((features_np.shape[0], self.num_class), device=box_preds.device)
-            
-            if object_mask_np.sum() > 0:
-                features_stage2_np = features_np[object_mask_np]
 
-                print(f"[DEBUG] RF Stage 2 실행. 입력 박스 수: {features_stage2_np.shape[0]} 개")
+            if features_np.shape[0] > 0:
+                # ⭐ Stage 2는 Stage 1 통과 박스만 대상으로 실행
+                print(f"[DEBUG] RF Stage 2 실행. 입력 박스 수: {features_np.shape[0]} 개")
 
-                prob_specific_class_np = self.rf_stage2.predict_proba(features_stage2_np) # (K, num_rf_classes)
+                prob_specific_class_np = self.rf_stage2.predict_proba(features_np)  # (K, num_rf_classes)
                 print(f"[DEBUG] Stage 2 예측 확률 (Max per class): {np.max(prob_specific_class_np, axis=0)}")
 
-                prob_specific_class = torch.from_numpy(prob_specific_class_np).cuda(box_preds.device)
+                prob_specific_class = torch.from_numpy(prob_specific_class_np).to(box_preds.device)
 
-                prob_obj = torch.from_numpy(prob_obj_np[object_mask_np]).cuda(box_preds.device).unsqueeze(-1)
-                final_obj_scores_rf = prob_specific_class * prob_obj # (K, num_rf_classes)
+                prob_obj = torch.from_numpy(prob_obj_np).to(box_preds.device).unsqueeze(-1)
+                final_obj_scores_rf = prob_specific_class * prob_obj  # (K, num_rf_classes)
 
                 print(f"[DEBUG] 최종 결합 점수 (Max per class): {torch.max(final_obj_scores_rf, dim=0)[0].cpu().numpy()}")
-                
+
                 final_obj_scores_openpcdet = torch.zeros(
-                    (final_obj_scores_rf.shape[0], self.num_class), 
+                    (final_obj_scores_rf.shape[0], self.num_class),
                     device=box_preds.device
                 )
 
@@ -260,14 +382,25 @@ class SECONDNet(Detector3DTemplate):
                     # openpcdet_idx는 1-based, 텐서 인덱스는 0-based
                     final_obj_scores_openpcdet[:, openpcdet_idx - 1] = final_obj_scores_rf[:, rf_idx]
 
-                final_scores[object_mask_np] = final_obj_scores_openpcdet
+                final_scores = final_obj_scores_openpcdet
 
             new_final_cls_preds_list.append(final_scores)
 
         # 3-9. [핵심] 원본 RPN 점수를 RF가 만든 최종 점수로 교체
         if batch_dict.get('batch_index', None) is not None:
+            # ⭐️ [추가] 박스 목록 덮어쓰기
+            batch_dict['batch_box_preds'] = torch.cat(new_final_box_preds_list, dim=0)
             batch_dict['batch_cls_preds'] = torch.cat(new_final_cls_preds_list, dim=0)
+            # ⭐️ [추가] 배치 인덱스도 덮어써야 함 (매우 중요)
+            new_batch_index_list = []
+            for i, boxes in enumerate(new_final_box_preds_list):
+                new_batch_index_list.append(
+                    torch.full((boxes.shape[0],), i, device=boxes.device, dtype=torch.int64)
+                )
+            batch_dict['batch_index'] = torch.cat(new_batch_index_list, dim=0)
         else:
+            # ⭐️ [추가] 박스 목록 덮어쓰기
+            batch_dict['batch_box_preds'] = torch.stack(new_final_box_preds_list, dim=0)
             batch_dict['batch_cls_preds'] = torch.stack(new_final_cls_preds_list, dim=0)
             
         # 3-10. [재사용] 부모의 원본 NMS 로직을 "새로운 점수"로 실행
