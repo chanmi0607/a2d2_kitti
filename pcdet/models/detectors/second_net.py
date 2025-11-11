@@ -246,6 +246,185 @@ class SECONDNet(Detector3DTemplate):
     # =================================================================
     # ⭐️ 3. [새로 추가/오버라이딩] post_processing 함수
     # =================================================================
+    # def post_processing(self, batch_dict):
+    #     # 3-1. RF 사용 안 함: 부모(원본)의 NMS 로직 실행
+    #     if not self.use_cascade_rf:
+    #         return super().post_processing(batch_dict)
+
+    #     # 3-2. RF 사용: Cascade 분류기 실행
+    #     post_process_cfg = self.model_cfg.POST_PROCESSING
+    #     batch_size = batch_dict['batch_size']
+    #     new_final_cls_preds_list = [] # 최종 RF 점수를 저장할 리스트
+    #     new_final_box_preds_list = [] # ⭐️ [추가] 필터링된 박스를 저장할 리스트
+
+    #     for index in range(batch_size):
+    #         # 3-3. RPN 결과(박스, 점수) 가져오기
+    #         if batch_dict.get('batch_index', None) is not None:
+    #             batch_mask = (batch_dict['batch_index'] == index)
+    #         else:
+    #             batch_mask = index
+
+    #         box_preds = batch_dict['batch_box_preds'][batch_mask] # (M, 7)
+    #         cls_preds_rpn = batch_dict['batch_cls_preds'][batch_mask] # (M, num_class)
+
+    #         if not batch_dict['cls_preds_normalized']:
+    #             cls_preds_rpn = torch.sigmoid(cls_preds_rpn)
+
+    #         pcr_tensor = torch.tensor(
+    #             self.point_cloud_range, dtype=torch.float32, device=box_preds.device
+    #         )
+    #         # 2. 박스 중심 좌표 (M, 3)
+    #         box_centers = box_preds[:, 0:3]
+
+    #         # 3. 범위 마스크 생성
+    #         # .all(dim=1)을 사용하여 x,y,z가 *모두* 범위 내에 있는지 확인
+    #         mask_min = (box_centers >= pcr_tensor[0:3]).all(dim=1)
+    #         mask_max = (box_centers <= pcr_tensor[3:6]).all(dim=1)
+            
+    #         # ⭐️ [수정] 필터링 전 박스 수 저장
+    #         total_boxes_before_filter = box_preds.shape[0]
+
+    #         range_mask = mask_min & mask_max
+            
+    #         # 5. [핵심] 범위 내의 박스만 필터링
+    #         box_preds = box_preds[range_mask]
+    #         cls_preds_rpn = cls_preds_rpn[range_mask]
+
+            
+
+    #         # ⭐️ [수정] print 문 수정
+    #         print(f"[DEBUG] 'Lidar 범위 밖' 필터로 {total_boxes_before_filter - box_preds.shape[0]} 개의 박스가 제거됨.")
+    #         forward_limit = 30.0
+    #         mask_forward = box_preds[:, 0] <= forward_limit   # LiDAR x축 기준
+    #         mask_backward = box_preds[:, 0] >= 0.0            # 후방 박스 제거
+    #         mask_fov = mask_forward & mask_backward
+
+    #         num_before = box_preds.shape[0]
+    #         box_preds = box_preds[mask_fov]
+    #         cls_preds_rpn = cls_preds_rpn[mask_fov]
+    #         print(f"[DEBUG] '전방 0~30m' 필터로 {num_before - box_preds.shape[0]}개 박스 제거됨. (남은 {box_preds.shape[0]})")
+
+    #         rpn_scores_max, _ = torch.max(cls_preds_rpn, dim=-1)
+
+    #         # 2. 원하는 임계값(0.55)을 설정합니다.
+    #         rpn_score_thresh = 0.55 
+
+    #         # 3. 임계값을 넘는 박스만 선택하는 마스크를 생성합니다.
+    #         rpn_score_mask = rpn_scores_max > rpn_score_thresh
+
+    #         num_before_rpn_filter = box_preds.shape[0]
+
+    #         # 4. [핵심] RPN 점수 마스크를 box_preds와 cls_preds_rpn에 모두 적용합니다.
+    #         box_preds = box_preds[rpn_score_mask]
+    #         cls_preds_rpn = cls_preds_rpn[rpn_score_mask]
+            
+    #         print(f"[DEBUG] 'RPN 점수 > {rpn_score_thresh}' 필터로 {num_before_rpn_filter - box_preds.shape[0]}개 박스 제거됨. (남은 {box_preds.shape[0]})")
+
+    #         # 3-4. RF 피처 생성 헬퍼 함수 호출
+    #         features_for_rf = self.create_features_for_rf(
+    #             batch_dict, index, box_preds, cls_preds_rpn
+    #         )
+            
+    #         # 3-5. CPU로 이동 (RF 모델 입력을 위해)
+    #         features_np = features_for_rf.detach().cpu().numpy()
+
+    #         if features_np.shape[0] == 0:
+    #             final_scores = torch.zeros((0, self.num_class), device=box_preds.device)
+    #             new_final_cls_preds_list.append(final_scores)
+    #             continue
+
+    #         # 3-6. [RF STAGE 1] Object vs Background 예측
+    #         prob_obj_np = self.rf_stage1.predict_proba(features_np)[:, 1] # (M,)
+
+    #         # ==========================================================
+    #         # ⭐️ 점군(point)이 0개인 박스 강제 0점 처리
+    #         # ==========================================================
+    #         # 1. 16개 피처 중 7번째(인덱스 6)가 num_points입니다.
+    #         # (순서: [x, y, z, dx, dy, dz, num_points, ...])
+    #         num_points_np = features_np[:, 6] 
+            
+    #         # 2. num_points가 0인 박스 마스크 생성
+    #         pointless_box_mask_np = (num_points_np <= 1)
+            
+    #         # 3. [핵심] 해당 박스들의 Stage 1 점수(P(Object))를 0.0으로 강제 할당
+    #         prob_obj_np[pointless_box_mask_np] = 0.0
+            
+    #         # 4. (디버깅) 얼마나 많은 박스가 0점 처리되었는지 확인
+    #         print(f"[DEBUG] '점군 0개' 필터로 {pointless_box_mask_np.sum()} 개의 박스가 0점 처리됨.")
+
+    #         print(f"\n[DEBUG] LiDAR 범위 내 RPN이 제안한 총 박스 수: {features_np.shape[0]} 개")
+    #         print(f"[DEBUG] RF Stage 1 최고점수 (Top 5): {np.sort(prob_obj_np)[-5:]}")
+
+    #         # 3-7. [RF STAGE 2] Specific Class (Car, Ped, Cyc) 예측
+    #         # 3-7. [RF STAGE 1] Specific Class (Car, Ped, Cyc) 예측
+    #         object_mask_np = prob_obj_np > self.rf_obj_thresh  # (M,)
+
+    #         # ==========================================================
+    #         # ⭐ Stage 1 통과 박스만 남기기 (나머지 완전 제거)
+    #         # ==========================================================
+    #         keep_mask = torch.from_numpy(object_mask_np).to(box_preds.device)
+
+    #         box_preds = box_preds[keep_mask]
+    #         cls_preds_rpn = cls_preds_rpn[keep_mask]
+    #         features_np = features_np[object_mask_np]
+    #         prob_obj_np = prob_obj_np[object_mask_np]
+    #         new_final_box_preds_list.append(box_preds)
+
+    #         print(f"[DEBUG] Stage 1 통과 (>{self.rf_obj_thresh}) 박스 수: {object_mask_np.sum()} 개\n")
+
+    #         final_scores = torch.zeros((features_np.shape[0], self.num_class), device=box_preds.device)
+
+    #         if features_np.shape[0] > 0:
+    #             # ⭐ Stage 2는 Stage 1 통과 박스만 대상으로 실행
+    #             print(f"[DEBUG] RF Stage 2 실행. 입력 박스 수: {features_np.shape[0]} 개")
+
+    #             prob_specific_class_np = self.rf_stage2.predict_proba(features_np)  # (K, num_rf_classes)
+    #             print(f"[DEBUG] Stage 2 예측 확률 (Max per class): {np.max(prob_specific_class_np, axis=0)}")
+
+    #             prob_specific_class = torch.from_numpy(prob_specific_class_np).to(box_preds.device)
+
+    #             prob_obj = torch.from_numpy(prob_obj_np).to(box_preds.device).unsqueeze(-1)
+    #             final_obj_scores_rf = prob_specific_class * prob_obj  # (K, num_rf_classes)
+
+    #             print(f"[DEBUG] 최종 결합 점수 (Max per class): {torch.max(final_obj_scores_rf, dim=0)[0].cpu().numpy()}")
+
+    #             final_obj_scores_openpcdet = torch.zeros(
+    #                 (final_obj_scores_rf.shape[0], self.num_class),
+    #                 device=box_preds.device
+    #             )
+
+    #             # 3-8. RF 클래스 인덱스를 OpenPCDet 인덱스로 매핑
+    #             for rf_idx, openpcdet_idx in self.rf_to_openpcdet_class_map.items():
+    #                 # openpcdet_idx는 1-based, 텐서 인덱스는 0-based
+    #                 final_obj_scores_openpcdet[:, openpcdet_idx - 1] = final_obj_scores_rf[:, rf_idx]
+
+    #             final_scores = final_obj_scores_openpcdet
+
+    #         new_final_cls_preds_list.append(final_scores)
+
+    #     # 3-9. [핵심] 원본 RPN 점수를 RF가 만든 최종 점수로 교체
+    #     if batch_dict.get('batch_index', None) is not None:
+    #         # ⭐️ [추가] 박스 목록 덮어쓰기
+    #         batch_dict['batch_box_preds'] = torch.cat(new_final_box_preds_list, dim=0)
+    #         batch_dict['batch_cls_preds'] = torch.cat(new_final_cls_preds_list, dim=0)
+    #         # ⭐️ [추가] 배치 인덱스도 덮어써야 함 (매우 중요)
+    #         new_batch_index_list = []
+    #         for i, boxes in enumerate(new_final_box_preds_list):
+    #             new_batch_index_list.append(
+    #                 torch.full((boxes.shape[0],), i, device=boxes.device, dtype=torch.int64)
+    #             )
+    #         batch_dict['batch_index'] = torch.cat(new_batch_index_list, dim=0)
+    #     else:
+    #         # ⭐️ [추가] 박스 목록 덮어쓰기
+    #         batch_dict['batch_box_preds'] = torch.stack(new_final_box_preds_list, dim=0)
+    #         batch_dict['batch_cls_preds'] = torch.stack(new_final_cls_preds_list, dim=0)
+            
+    #     # 3-10. [재사용] 부모의 원본 NMS 로직을 "새로운 점수"로 실행
+    #     return super().post_processing(batch_dict)
+
+    # =================================================================
+    # ⭐️ 3. [새로 추가/오버라이딩] post_processing 함수
+    # =================================================================
     def post_processing(self, batch_dict):
         # 3-1. RF 사용 안 함: 부모(원본)의 NMS 로직 실행
         if not self.use_cascade_rf:
@@ -270,30 +449,23 @@ class SECONDNet(Detector3DTemplate):
             if not batch_dict['cls_preds_normalized']:
                 cls_preds_rpn = torch.sigmoid(cls_preds_rpn)
 
+            # --- (1) Lidar 범위 필터링 ---
             pcr_tensor = torch.tensor(
                 self.point_cloud_range, dtype=torch.float32, device=box_preds.device
             )
-            # 2. 박스 중심 좌표 (M, 3)
             box_centers = box_preds[:, 0:3]
-
-            # 3. 범위 마스크 생성
-            # .all(dim=1)을 사용하여 x,y,z가 *모두* 범위 내에 있는지 확인
             mask_min = (box_centers >= pcr_tensor[0:3]).all(dim=1)
             mask_max = (box_centers <= pcr_tensor[3:6]).all(dim=1)
             
-            # ⭐️ [수정] 필터링 전 박스 수 저장
             total_boxes_before_filter = box_preds.shape[0]
-
             range_mask = mask_min & mask_max
             
-            # 5. [핵심] 범위 내의 박스만 필터링
             box_preds = box_preds[range_mask]
             cls_preds_rpn = cls_preds_rpn[range_mask]
 
-            
-
-            # ⭐️ [수정] print 문 수정
             print(f"[DEBUG] 'Lidar 범위 밖' 필터로 {total_boxes_before_filter - box_preds.shape[0]} 개의 박스가 제거됨.")
+
+            # --- (2) 전방 0~30m 필터링 ---
             forward_limit = 30.0
             mask_forward = box_preds[:, 0] <= forward_limit   # LiDAR x축 기준
             mask_backward = box_preds[:, 0] >= 0.0            # 후방 박스 제거
@@ -303,6 +475,31 @@ class SECONDNet(Detector3DTemplate):
             box_preds = box_preds[mask_fov]
             cls_preds_rpn = cls_preds_rpn[mask_fov]
             print(f"[DEBUG] '전방 0~30m' 필터로 {num_before - box_preds.shape[0]}개 박스 제거됨. (남은 {box_preds.shape[0]})")
+
+
+            # ==========================================================
+            # ⭐️ [수정 1] RPN 점수 기반 1차 필터링 (Template의 0.55 로직)
+            # ==========================================================
+            # 1. RPN이 예측한 점수 중 가장 높은 클래스 점수를 가져옵니다.
+            rpn_scores_max, _ = torch.max(cls_preds_rpn, dim=-1)
+
+            # 2. 원하는 임계값(0.55)을 설정합니다.
+            rpn_score_thresh = 0.55 
+
+            # 3. 임계값을 넘는 박스만 선택하는 마스크를 생성합니다.
+            rpn_score_mask = rpn_scores_max > rpn_score_thresh
+
+            num_before_rpn_filter = box_preds.shape[0]
+
+            # 4. [핵심] RPN 점수 마스크를 box_preds, cls_preds_rpn에 모두 적용합니다.
+            box_preds = box_preds[rpn_score_mask]
+            cls_preds_rpn = cls_preds_rpn[rpn_score_mask]
+            
+            # [중요] Stage 2와 결합하기 위해 필터링된 RPN 점수를 저장합니다.
+            rpn_scores_filtered = rpn_scores_max[rpn_score_mask] 
+            
+            print(f"[DEBUG] 'RPN 점수 > {rpn_score_thresh}' 필터로 {num_before_rpn_filter - box_preds.shape[0]}개 박스 제거됨. (남은 {box_preds.shape[0]})")
+
 
             # 3-4. RF 피처 생성 헬퍼 함수 호출
             features_for_rf = self.create_features_for_rf(
@@ -315,59 +512,60 @@ class SECONDNet(Detector3DTemplate):
             if features_np.shape[0] == 0:
                 final_scores = torch.zeros((0, self.num_class), device=box_preds.device)
                 new_final_cls_preds_list.append(final_scores)
+                # [중요] 빈 박스라도 NMS 모듈을 위해 리스트에 추가해야 함
+                new_final_box_preds_list.append(box_preds)
                 continue
 
-            # 3-6. [RF STAGE 1] Object vs Background 예측
-            prob_obj_np = self.rf_stage1.predict_proba(features_np)[:, 1] # (M,)
+            # ==========================================================
+            # ⭐️ [수정 2] RF STAGE 1 (Object vs Background) 로직 *제거*
+            # ==========================================================
+            # (기존 rf_stage1.predict_proba 호출 및 관련 로직 모두 삭제됨)
+
 
             # ==========================================================
-            # ⭐️ 점군(point)이 0개인 박스 강제 0점 처리
+            # ⭐️ [수정 3] 점군(point)이 0개인 박스 *필터링* (0점 처리 대신)
             # ==========================================================
             # 1. 16개 피처 중 7번째(인덱스 6)가 num_points입니다.
-            # (순서: [x, y, z, dx, dy, dz, num_points, ...])
             num_points_np = features_np[:, 6] 
             
-            # 2. num_points가 0인 박스 마스크 생성
+            # 2. num_points가 1 이하인 박스 마스크 생성
             pointless_box_mask_np = (num_points_np <= 1)
+            keep_mask_np = ~pointless_box_mask_np # 점이 *있는* 박스만 남김
+            keep_mask = torch.from_numpy(keep_mask_np).to(box_preds.device)
             
-            # 3. [핵심] 해당 박스들의 Stage 1 점수(P(Object))를 0.0으로 강제 할당
-            prob_obj_np[pointless_box_mask_np] = 0.0
+            num_before_pointless_filter = box_preds.shape[0]
             
-            # 4. (디버깅) 얼마나 많은 박스가 0점 처리되었는지 확인
-            print(f"[DEBUG] '점군 0개' 필터로 {pointless_box_mask_np.sum()} 개의 박스가 0점 처리됨.")
-
-            print(f"\n[DEBUG] LiDAR 범위 내 RPN이 제안한 총 박스 수: {features_np.shape[0]} 개")
-            print(f"[DEBUG] RF Stage 1 최고점수 (Top 5): {np.sort(prob_obj_np)[-5:]}")
-
-            # 3-7. [RF STAGE 2] Specific Class (Car, Ped, Cyc) 예측
-            # 3-7. [RF STAGE 1] Specific Class (Car, Ped, Cyc) 예측
-            object_mask_np = prob_obj_np > self.rf_obj_thresh  # (M,)
-
-            # ==========================================================
-            # ⭐ Stage 1 통과 박스만 남기기 (나머지 완전 제거)
-            # ==========================================================
-            keep_mask = torch.from_numpy(object_mask_np).to(box_preds.device)
-
+            # 3. [핵심] 해당 박스들을 *모든 텐서에서 제거*
             box_preds = box_preds[keep_mask]
-            cls_preds_rpn = cls_preds_rpn[keep_mask]
-            features_np = features_np[object_mask_np]
-            prob_obj_np = prob_obj_np[object_mask_np]
+            features_np = features_np[keep_mask_np]
+            rpn_scores_filtered = rpn_scores_filtered[keep_mask] # RPN 점수도 함께 필터링
+            
+            print(f"[DEBUG] '점군 0~1개' 필터로 {num_before_pointless_filter - box_preds.shape[0]} 개의 박스가 제거됨.")
+
+            
+            # ==========================================================
+            # ⭐️ [수정 4] RF STAGE 2 실행 (Stage 1 임계값 로직 제거)
+            # ==========================================================
+            
+            # (기존 object_mask_np, rf_obj_thresh 비교 로직 모두 삭제됨)
+            
+            # [수정] RPN>0.55 + 점군>1 필터를 통과한 박스들을 최종 박스 리스트에 추가
             new_final_box_preds_list.append(box_preds)
 
-            print(f"[DEBUG] Stage 1 통과 (>{self.rf_obj_thresh}) 박스 수: {object_mask_np.sum()} 개\n")
+            print(f"[DEBUG] RF Stage 2 실행. 입력 박스 수: {features_np.shape[0]} 개\n")
 
             final_scores = torch.zeros((features_np.shape[0], self.num_class), device=box_preds.device)
 
             if features_np.shape[0] > 0:
-                # ⭐ Stage 2는 Stage 1 통과 박스만 대상으로 실행
-                print(f"[DEBUG] RF Stage 2 실행. 입력 박스 수: {features_np.shape[0]} 개")
-
+                # ⭐ Stage 2는 RPN>0.55 + 점군>1 통과 박스만 대상으로 실행
                 prob_specific_class_np = self.rf_stage2.predict_proba(features_np)  # (K, num_rf_classes)
                 print(f"[DEBUG] Stage 2 예측 확률 (Max per class): {np.max(prob_specific_class_np, axis=0)}")
 
                 prob_specific_class = torch.from_numpy(prob_specific_class_np).to(box_preds.device)
 
-                prob_obj = torch.from_numpy(prob_obj_np).to(box_preds.device).unsqueeze(-1)
+                # ⭐️ [수정 5] prob_obj를 RF Stage 1이 아닌, 저장해둔 RPN 점수로 대체
+                prob_obj = rpn_scores_filtered.unsqueeze(-1) 
+                
                 final_obj_scores_rf = prob_specific_class * prob_obj  # (K, num_rf_classes)
 
                 print(f"[DEBUG] 최종 결합 점수 (Max per class): {torch.max(final_obj_scores_rf, dim=0)[0].cpu().numpy()}")

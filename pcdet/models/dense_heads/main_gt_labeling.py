@@ -10,8 +10,6 @@ from propose_main import filter_points_by_z_spread # propose_main.py에서 함�
 from pcdet.models.detectors.bev_utils import pointcloud_to_bev
 from pcdet.models.dense_heads.clustering_utils import cluster_bev_image
 from pcdet.models.dense_heads.rf_gt_utils import get_a2d2_gt_boxes # rf_gt_utils.py에서 함수 임포트
-
-
 # ========================= [수정된 부분 시작] =========================
 def associate_clusters_with_gt(clusters, gt_boxes, distance_threshold=0):
     """
@@ -141,8 +139,26 @@ def main():
         
         # 4. 결과 시각화
         # GT 박스 그리기 (녹색)
-        for gt_box in gt_boxes:
-            cv2.polylines(clustered_bev_image, [gt_box['corners']], isClosed=True, color=(0, 255, 0), thickness=1)
+        # for gt_box in gt_boxes:
+        #     cv2.polylines(clustered_bev_image, [gt_box['corners']], isClosed=True, color=(0, 255, 0), thickness=2)
+
+        # ========================= [수정된 부분 시작] =========================
+        
+        # 최종 라벨링된 객체 그리기 (빨간색으로 통일)
+        color_red = (255, 0, 0)  # BGR 순서에서 빨간색
+        
+        for obj in final_objects:
+            # box 좌표를 int로 변환
+            x, y, w, h = map(int, obj['box'])
+            
+            # 요청대로 모든 박스를 'color_red'로 그림
+            cv2.rectangle(clustered_bev_image, (x, y), (x + w, y + h), color_red, 2)
+            
+            # 요청대로 클래스 이름 출력(putText) 부분은 주석 처리
+            class_name = obj['class']
+            cv2.putText(clustered_bev_image, class_name, (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color_red, 2)
+        
+        # ========================= [수정된 부분 끝] ===========================
 
         # 최종 라벨링된 객체 그리기 (클래스별 색상)
         for obj in final_objects:
@@ -151,6 +167,15 @@ def main():
             class_name = obj['class']
             color = CLASS_COLOR_MAP.get(class_name, CLASS_COLOR_MAP['Default'])
             cv2.rectangle(clustered_bev_image, (x, y), (x + w, y + h), color, 2)
+            # 1. 원본 BEV (Morphology 적용 전)
+            #    bev_image는 0 또는 1 이상의 값을 가질 수 있으므로, 
+            #    시각화를 위해 0보다 크면 255(흰색)로 변환합니다.
+            vis_bev_image = (bev_image > 0).astype(np.uint8) * 255
+            cv2.imshow("1. Original BEV (Before Morphology)", vis_bev_image)
+
+            # 2. Morphology 적용 후
+            vis_closed_bev_image = (closed_bev_image > 0).astype(np.uint8) * 255
+            cv2.imshow("2. After Morphology (Close)", vis_closed_bev_image)
             cv2.putText(clustered_bev_image, class_name, (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
 
         cv2.putText(clustered_bev_image, bin_name, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)

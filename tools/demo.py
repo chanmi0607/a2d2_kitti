@@ -136,12 +136,12 @@ def main():
 
 
             # ✅ (선택) 시각화
-            # V.draw_scenes(
-            #     points=data_dict['points'][:, 1:],
-            #     ref_boxes=pred_dicts[0]['pred_boxes'],
-            #     ref_scores=pred_dicts[0]['pred_scores'],
-            #     ref_labels=pred_dicts[0]['pred_labels']
-            # )
+            V.draw_scenes(
+                points=data_dict['points'][:, 1:],
+                ref_boxes=pred_dicts[0]['pred_boxes'],
+                ref_scores=pred_dicts[0]['pred_scores'],
+                ref_labels=pred_dicts[0]['pred_labels']
+            )
             if not OPEN3D_FLAG:
                 mlab.show(stop=True)
 

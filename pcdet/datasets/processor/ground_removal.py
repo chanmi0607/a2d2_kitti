@@ -432,7 +432,7 @@ def custom_visualize_ground_removal(pcd: o3d.geometry.PointCloud,
         # 파란색으로 설정
         plane_wireframe.paint_uniform_color([0, 0, 1])
         
-        geometries.append(plane_wireframe)
+        #geometries.append(plane_wireframe)
     
     # 좌표계 추가
     coordinate_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=2.0)
@@ -469,6 +469,12 @@ if __name__ == "__main__":
         print(f"\n=== Processing {bin_name} ===")
     
         pcd = read_kitti_bin(bin_path)
+
+        print("원본 포인트 클라우드를 시각화합니다...")
+        o3d.visualization.draw_geometries(
+            [pcd], 
+            window_name=f"Original Point Cloud - {bin_name}"
+        )
         points = np.asarray(pcd.points)
         # ROI 파라미터 설정
         sensor_height = 1.73       # 센서 높이
@@ -535,39 +541,39 @@ if __name__ == "__main__":
             o3d.visualization.draw_geometries([pcd_filtered], window_name="ROI 기반 지면 제거 결과")
 
 
-        # if plane_coeffs is not None:
-        #     a, b, c, d = plane_coeffs
-        #     print(f"지면 평면 방정식: {a:.3f}x + {b:.3f}y + {c:.3f}z + {d:.3f} = 0")
-        #     print(f"지면 inlier 개수: {len(ground_indices)}")
-        #     print(f"객체 포인트 수: {len(object_indices)}")
+        if plane_coeffs is not None:
+            a, b, c, d = plane_coeffs
+            print(f"지면 평면 방정식: {a:.3f}x + {b:.3f}y + {c:.3f}z + {d:.3f} = 0")
+            print(f"지면 inlier 개수: {len(ground_indices)}")
+            print(f"객체 포인트 수: {len(object_indices)}")
             
-        #     # 지면 제거 결과 시각화
-        #     custom_visualize_ground_removal(roi_pcd, plane_coeffs, ground_indices, object_indices)
+            # 지면 제거 결과 시각화
+            custom_visualize_ground_removal(roi_pcd, plane_coeffs, ground_indices, object_indices)
             
-        #     # ROI 내 포인트 클라우드에서 추출한 지면 방정식을 전체 포인트 클라우드에서도 적용하여 지면 방정식의 inlier 포인트들 재선정
-        #     distances = custom_compute_plane_distances(pcd, plane_coeffs)  # TODO: 전체 포인트 클라우드에서 지면 방정식에 대한 거리 계산
-        #     inlier_indices, outlier_indices = custom_find_inliers_outliers(distances, distance_threshold)  # TODO: 전체 포인트 클라우드에서 inlier/ outlier 인덱스 추출
+            # ROI 내 포인트 클라우드에서 추출한 지면 방정식을 전체 포인트 클라우드에서도 적용하여 지면 방정식의 inlier 포인트들 재선정
+            distances = custom_compute_plane_distances(pcd, plane_coeffs)  # TODO: 전체 포인트 클라우드에서 지면 방정식에 대한 거리 계산
+            inlier_indices, outlier_indices = custom_find_inliers_outliers(distances, distance_threshold)  # TODO: 전체 포인트 클라우드에서 inlier/ outlier 인덱스 추출
 
-        #     # 지면이 제거된 객체 포인트 클라우드 생성 (inlier_indices)
-        #     non_ground_pcd = custom_remove_ground_points(pcd, inlier_indices) # TODO: custom_remove_ground_points 함수 완성
-        #     print(f"지면 제거 후 객체 포인트 수: {len(non_ground_pcd.points)}")
-        # else:
-        #     print("지면 평면을 찾을 수 없습니다!")
+            # 지면이 제거된 객체 포인트 클라우드 생성 (inlier_indices)
+            non_ground_pcd = custom_remove_ground_points(pcd, inlier_indices) # TODO: custom_remove_ground_points 함수 완성
+            print(f"지면 제거 후 객체 포인트 수: {len(non_ground_pcd.points)}")
+        else:
+            print("지면 평면을 찾을 수 없습니다!")
 
-        # # 시각화 - 원본
-        # pcd_all = o3d.geometry.PointCloud()
-        # pcd_all.points = o3d.utility.Vector3dVector(points[:, :3])
-        # o3d.visualization.draw_geometries([pcd_all], window_name="원본 포인트 클라우드")
+        # 시각화 - 원본
+        pcd_all = o3d.geometry.PointCloud()
+        pcd_all.points = o3d.utility.Vector3dVector(points[:, :3])
+        o3d.visualization.draw_geometries([pcd_all], window_name="원본 포인트 클라우드")
 
-        # # ground 제거된 포인트 얻기
-        # filtered_points = remove_ground_open3d(points)
+        # ground 제거된 포인트 얻기
+        filtered_points = remove_ground_open3d(points)
 
-        # # 시각화용 포인트클라우드 생성
-        # pcd_filtered = o3d.geometry.PointCloud()
-        # pcd_filtered.points = o3d.utility.Vector3dVector(filtered_points[:, :3])
+        # 시각화용 포인트클라우드 생성
+        pcd_filtered = o3d.geometry.PointCloud()
+        pcd_filtered.points = o3d.utility.Vector3dVector(filtered_points[:, :3])
 
-        # # 시각화
-        # o3d.visualization.draw_geometries([pcd_filtered], window_name="지면 제거된 포인트 클라우드")
+        # 시각화
+        o3d.visualization.draw_geometries([pcd_filtered], window_name="지면 제거된 포인트 클라우드")
 
 
 # if __name__ == "__main__":
@@ -594,6 +600,12 @@ if __name__ == "__main__":
 
 #         # 원본 로드
 #         pcd = read_kitti_bin(bin_path)
+
+#         print("원본 포인트 클라우드를 시각화합니다...")
+#         o3d.visualization.draw_geometries(
+#             [pcd], 
+#             window_name=f"Original Point Cloud - {bin_name}"
+#         )
 #         points = np.asarray(pcd.points)
 
 #         # 시각화용 원본 저장

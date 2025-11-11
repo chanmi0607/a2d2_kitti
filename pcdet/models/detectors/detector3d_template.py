@@ -11,6 +11,15 @@ from ..backbones_3d import pfe, vfe
 from ..model_utils import model_nms_utils
 
 
+try:
+    import open3d
+    from tools.visual_utils import open3d_vis_utils as V
+    OPEN3D_FLAG = True
+except:
+    import mayavi.mlab as mlab
+    from tools.visual_utils import visualize_utils as V
+    OPEN3D_FLAG = False
+
 class Detector3DTemplate(nn.Module):
     def __init__(self, model_cfg, num_class, dataset):
         super().__init__()
@@ -206,7 +215,35 @@ class Detector3DTemplate(nn.Module):
 
             box_preds = batch_dict['batch_box_preds'][batch_mask]
             src_box_preds = box_preds
-            
+
+            cls_preds = batch_dict['batch_cls_preds'][batch_mask]
+
+            points_mask = (batch_dict['points'][:, 0] == index)
+            points_np = batch_dict['points'][points_mask, 1:].detach().cpu().numpy()
+            # boxes_np = box_preds.detach().cpu().numpy()
+
+            # pc_range = [-75.2, -75.2, -2, 75.2, 75.2, 6]
+            # x_min, y_min, z_min, x_max, y_max, z_max = pc_range
+
+            # # --- 2. box center 기준 필터링 ---
+            # # box_preds 형태: [N, 7] → (x, y, z, dx, dy, dz, heading)
+            # cx, cy, cz = boxes_np[:, 0], boxes_np[:, 1], boxes_np[:, 2]
+
+            # mask_valid = (
+            #     (cx >= x_min) & (cx <= x_max) &
+            #     (cy >= y_min) & (cy <= y_max) &
+            #     (cz >= z_min) & (cz <= z_max)
+            # )
+
+            # boxes_np_valid = boxes_np[mask_valid]
+
+
+            # # ✅ (선택) 시각화
+            # V.draw_scenes(
+            #     points=points_np,
+            #     ref_boxes=boxes_np_valid
+            # )
+
             if not isinstance(batch_dict['batch_cls_preds'], list):
                 cls_preds = batch_dict['batch_cls_preds'][batch_mask]
 
@@ -249,6 +286,31 @@ class Detector3DTemplate(nn.Module):
                 final_boxes = torch.cat(pred_boxes, dim=0)
             else:
                 cls_preds, label_preds = torch.max(cls_preds, dim=-1)
+                # ✅ NMS 전에 시각화할 raw 예측 박스
+                boxes_np_raw = box_preds.detach().cpu().numpy()
+                cls_scores_np = torch.sigmoid(cls_preds).detach().cpu().numpy()
+
+                # 1️⃣ 점수 기반 필터링 (기본값 0.2)
+                score_thresh = 0.55
+                mask_conf = cls_scores_np > score_thresh
+                boxes_np_conf = boxes_np_raw[mask_conf]
+                # 2️⃣ (선택) 랜덤 샘플링 (예: 최대 5000개만)
+                max_vis_boxes = 5000
+                if boxes_np_conf.shape[0] > max_vis_boxes:
+                    idx = np.random.choice(boxes_np_conf.shape[0], max_vis_boxes, replace=False)
+                    boxes_np_conf = boxes_np_conf[idx]
+
+                # 3️⃣ (선택) 범위 제한 (예: x,y -40~40)
+                cx, cy = boxes_np_conf[:, 0], boxes_np_conf[:, 1]
+                mask_range = (np.abs(cx) < 40) & (np.abs(cy) < 40)
+                boxes_np_vis = boxes_np_conf[mask_range]
+
+                print(f"[INFO] Pre-NMS boxes visualized: {boxes_np_vis.shape[0]} / {boxes_np_raw.shape[0]}")
+
+                V.draw_scenes(points=points_np, ref_boxes=boxes_np_vis)
+
+
+
                 if batch_dict.get('has_class_labels', False):
                     label_key = 'roi_labels' if 'roi_labels' in batch_dict else 'batch_pred_labels'
                     label_preds = batch_dict[label_key][index]
@@ -267,6 +329,30 @@ class Detector3DTemplate(nn.Module):
                 final_scores = selected_scores
                 final_labels = label_preds[selected]
                 final_boxes = box_preds[selected]
+
+                # boxes_np = final_boxes.detach().cpu().numpy()
+
+                # pc_range = [-75.2, -75.2, -2, 75.2, 75.2, 6]
+                # x_min, y_min, z_min, x_max, y_max, z_max = pc_range
+
+                # # --- 2. box center 기준 필터링 ---
+                # # box_preds 형태: [N, 7] → (x, y, z, dx, dy, dz, heading)
+                # cx, cy, cz = boxes_np[:, 0], boxes_np[:, 1], boxes_np[:, 2]
+
+                # mask_valid = (
+                #     (cx >= x_min) & (cx <= x_max) &
+                #     (cy >= y_min) & (cy <= y_max) &
+                #     (cz >= z_min) & (cz <= z_max)
+                # )
+
+                # boxes_np_valid = boxes_np[mask_valid]
+
+
+                # # ✅ (선택) 시각화
+                # V.draw_scenes(
+                #     points=points_np,
+                #     ref_boxes=boxes_np_valid
+                # )
                     
             recall_dict = self.generate_recall_record(
                 box_preds=final_boxes if 'rois' not in batch_dict else src_box_preds,
