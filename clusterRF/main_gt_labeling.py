@@ -9,7 +9,7 @@ from collections import defaultdict
 # 기존 모듈에서 필요한 함수들을 가져옴
 from ground_removal_onlyz import read_kitti_bin, remove_ground_by_z_axis
 from propose_main import filter_points_by_z_spread
-from pcdet.models.detectors.bev_utils import pointcloud_to_bev # 포인트 클라우드를 bev 이미지로 변환
+from bev_utils import pointcloud_to_bev # 포인트 클라우드를 bev 이미지로 변환
 from clustering_utils import cluster_bev_image # bev 이미지에서 클러스터링 수행
 from rf_gt_utils import get_a2d2_gt_boxes # a2d2 GT 박스 로드
 # ========================= [수정된 부분 시작] =========================
@@ -92,8 +92,8 @@ def main():
 
     # 클래스별 색상 지정 (BGR 순서)
     CLASS_COLOR_MAP = {
-        'Car': (0, 0, 255), 'Van': (0, 100, 255), 'Truck': (0, 128, 255), 
-        'Pedestrian': (255, 0, 0), 'Cyclist': (255, 255, 0),
+        'Car': (0, 0, 255), 'Van': (0, 0, 255), 'Truck': (0, 0, 255), 
+        'Pedestrian': (0, 0, 255), 'Cyclist': (255, 255, 0),
         'Default': (200, 200, 200)
     }
 

@@ -1,4 +1,4 @@
-
+# bev 변환 후 gt를 시각화
 
 import os
 import numpy as np
@@ -66,9 +66,6 @@ def load_and_project_a2d2_gt_boxes(label_path, calibration, bev_x_range, bev_y_r
             center_cam = np.array([[cx_cam, cy_cam - h / 2, cz_cam]])
             center_lidar = calibration.cam_to_lidar(center_cam)[0]
             
-            # ========================================================
-            # ✅ 1. 회전 각도 변환 및 네 꼭짓점 계산
-            # ========================================================
             # 카메라 좌표계의 Y축 회전을 LiDAR 좌표계의 Z축 회전(yaw)으로 변환
             ry_lidar = -ry_cam - np.pi / 2
 
@@ -90,9 +87,6 @@ def load_and_project_a2d2_gt_boxes(label_path, calibration, bev_x_range, bev_y_r
             rotated_corners = corners_bev @ rotation_matrix.T
             rotated_corners += center_lidar[:2] # x, y 좌표만 사용
 
-            # ========================================================
-            # ✅ 2. 네 꼭짓점을 BEV 픽셀 좌표로 변환
-            # ========================================================
             pixel_corners = []
             for corner in rotated_corners:
                 px = corner[0]
@@ -125,9 +119,6 @@ def debug_single_a2d2_frame(bin_path, label_path, calib_path):
     gt_boxes = load_and_project_a2d2_gt_boxes(label_path, calibration, BEV_X_RANGE, BEV_Y_RANGE, BEV_RESOLUTION)
 
     for gt in gt_boxes:
-        # ========================================================
-        # ✅ 3. cv2.rectangle 대신 cv2.drawContours로 그리기
-        # ========================================================
         corners = gt['corners']
         # cv2.drawContours는 [꼭짓점 배열] 형태의 리스트를 입력으로 받음
         cv2.drawContours(vis_image, [corners.astype(np.int32)], -1, (0, 255, 0), 2)
@@ -143,9 +134,6 @@ def debug_single_a2d2_frame(bin_path, label_path, calib_path):
 
 
 if __name__ == '__main__':
-    # ========================================================
-    # ✅ 이 부분이 수정되었습니다.
-    # ========================================================
     
     # --- 데이터 기본 경로 설정 ---
     BASE_DIR = "/home/a/OpenPCDet/data/a2d2/training"

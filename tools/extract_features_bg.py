@@ -1,3 +1,5 @@
+# RPN 예측 박스들을 뽑고 GT와 IoU 매칭하여 Background만 남김 (30m 이내만)
+
 import argparse
 import numpy as np
 import torch
@@ -32,8 +34,6 @@ except ImportError:
     except ImportError: V = None; OPEN3D_FLAG = False
 
 
-# --- [삭제] DemoDataset 클래스 (더 이상 사용 안 함) ---
-
 # --- 설정 파싱 함수 (수정) ---
 def parse_config():
     parser = argparse.ArgumentParser(description='arg parser')
@@ -41,8 +41,8 @@ def parse_config():
                         default='tools/cfgs/a2d2_models/second.yaml',
                         help='specify the config file')
     
-    # --- [수정] data_path 대신 split과 output_csv ---
-    parser.add_argument('--split', type=str, default='train', 
+    
+    parser.add_argument('--split', type=str, default='train',  # split train or val
                         help='Which data split to process: train or val')
     parser.add_argument('--output_csv', type=str, default=None,
                         help='Path to save the final combined CSV file. (default: rpn_features_[split].csv)')
@@ -418,21 +418,22 @@ def main():
         logger.error(f"컬럼 이름 오류: {e}. 'desired_column_order' 리스트를 확인하세요.")
         logger.error(f"사용 가능한 컬럼: {final_df.columns.tolist()}")
         return # 오류 발생 시 중단
-    
-    # --- ▼▼▼▼▼ 여기 필터링 추가 ▼▼▼▼▼ ---
+
     # 3. 'label'이 'Background'인 행만 선택
-    final_df_background_only = final_df_reordered[final_df_reordered['label'] == 'Background'].copy()
-    logger.info(f"Filtered to keep only 'Background' samples: {len(final_df_reordered)} -> {len(final_df_background_only)}")
-    # --- ▲▲▲▲▲ 필터링 추가 끝 ▲▲▲▲▲ ---
+    #final_df_background_only = final_df_reordered[final_df_reordered['label'] == 'Background'].copy()
+    final_df_fg_bg = final_df_reordered[final_df_reordered['label'] != 'Ignore'].copy()
+    logger.info(f"Filtered to keep only FG/BG (Ignore removed): {len(final_df_reordered)} -> {len(final_df_fg_bg)}")
+
+
 
     # --- ▼▼▼▼▼ 거리 필터링 추가 ▼▼▼▼▼ ---
     # 4. 거리 계산 (XY 평면 기준)
-    distances = np.sqrt(final_df_background_only['x']**2 + final_df_background_only['y']**2)
+    distances = np.sqrt(final_df_fg_bg['x']**2 + final_df_fg_bg['y']**2)
 
     # 5. 거리 30m 이내인 샘플만 선택
     distance_threshold = 30.0
-    final_df_background_nearby = final_df_background_only[distances <= distance_threshold].copy()
-    logger.info(f"Filtered by distance <= {distance_threshold}m: {len(final_df_background_only)} -> {len(final_df_background_nearby)}")
+    final_df_fg_bg_nearby = final_df_fg_bg[distances <= distance_threshold].copy()
+    logger.info(f"Filtered by distance <= {distance_threshold}m: {len(final_df_fg_bg)} -> {len(final_df_fg_bg_nearby)}")
     # --- ▲▲▲▲▲ 거리 필터링 추가 끝 ▲▲▲▲▲ ---
 
     # 저장
@@ -440,16 +441,20 @@ def main():
     output_path.parent.mkdir(parents=True, exist_ok=True)
     # final_df.to_csv(output_path, index=False) # <--- 기존 코드
     #final_df_reordered.to_csv(output_path, index=False) # <--- 재정렬된 DataFrame 저장
-    final_df_background_nearby.to_csv(output_path, index=False)
+    final_df_fg_bg_nearby['label'] = final_df_fg_bg_nearby['label'].apply(
+        lambda x: 'Object' if x != 'Background' else 'Background'
+    )
+
+    final_df_fg_bg_nearby.to_csv(output_path, index=False)
 
     # --- ▲▲▲▲▲ 수정된 부분 끝 ▲▲▲▲▲ ---
     
     logger.info(f"✅ 최종 피처 파일 저장 완료: {output_path}")
-    logger.info(f"총 {len(final_df_background_only)}개의 샘플 (Proposal)이 저장되었습니다.")
+    logger.info(f"총 {len(final_df_fg_bg_nearby)}개의 샘플 (Proposal)이 저장되었습니다.")
     
     # --- [요청사항 4] 백그라운드 구분이 잘 되었는지 확인 ---
     logger.info("\n--- 최종 라벨 분포 (RF 학습에 사용될 샘플) ---")
-    print(final_df_background_only['label'].value_counts())
+    print(final_df_fg_bg['label'].value_counts())
     logger.info("--------------------------------------------------")
 
     total_time = time.time() - main_start_time

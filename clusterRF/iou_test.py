@@ -1,3 +1,5 @@
+# IoU 얼마나 겹치는지 보기
+
 import os
 import numpy as np
 import cv2
@@ -40,9 +42,6 @@ def calculate_iou_polygons(poly1_corners: np.ndarray, rect2: Tuple[int, int, int
     return iou
 
 
-# ========================================================
-# ✅ 1. 클러스터링 함수를 스크립트에 추가
-# ========================================================
 def cluster_bev_image(
     bev_image: np.ndarray, 
     min_area_threshold: int = 5
@@ -192,9 +191,6 @@ def debug_single_a2d2_frame(bin_path, label_path, calib_path):
     gt_boxes = load_and_project_a2d2_gt_boxes(label_path, calibration, BEV_X_RANGE, BEV_Y_RANGE, BEV_RESOLUTION)
     clusters, _ = cluster_bev_image(bev_image, min_area_threshold=15)
 
-    # ========================================================
-    # ✅ NEW: 매칭 로직 (GT와 클러스터 간 IoU 계산)
-    # ========================================================
     # 각 클러스터에 가장 잘 맞는 GT 정보를 저장할 리스트
     cluster_matches = [{'label': None, 'iou': 0.0} for _ in clusters]
 
@@ -234,9 +230,6 @@ def debug_single_a2d2_frame(bin_path, label_path, calib_path):
     # ✅ 2. BEV 이미지로 클러스터링 수행 및 결과 이미지 가져오기
     # ========================================================
     for gt in gt_boxes:
-        # ========================================================
-        # ✅ 3. 클러스터링 이미지 위에 GT 박스(초록색) 겹쳐 그리기
-        # ========================================================
         corners = gt['corners']
         # cv2.drawContours는 [꼭짓점 배열] 형태의 리스트를 입력으로 받음
         cv2.drawContours(vis_image, [corners.astype(np.int32)], -1, (0, 255, 0), 2) # 초록색
@@ -250,9 +243,6 @@ def debug_single_a2d2_frame(bin_path, label_path, calib_path):
     key = cv2.waitKey(0)
     cv2.destroyAllWindows()
     return key
-    # ========================================================
-    # ✅ 4. 'q' 키 입력을 반환하여 메인 루프에서 종료할 수 있도록 수정
-    # ========================================================
     return key
 
 

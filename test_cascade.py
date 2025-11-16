@@ -8,7 +8,7 @@ from sklearn.preprocessing import LabelEncoder
 # --- 1. 파일 경로 설정 ---
 MODEL_1_PATH = 'data/a2d2/rf_stage1_model.pkl'
 MODEL_2_PATH = 'data/a2d2/rf_stage2_model.pkl'
-TEST_FILE_PATH = 'data/a2d2/final_cascade_test_set.csv' 
+TEST_FILE_PATH = 'data/a2d2/final_cascade_test_set.csv'
 TARGET_COLUMN = 'label'
 STAGE_1_OBJECT_LABEL = 1 
 

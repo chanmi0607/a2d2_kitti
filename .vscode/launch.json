@@ -1,23 +1,94 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+        // -----------------------------------------------------------------
+        // --- 1단계: 피처 추출 (RPN 실행 -> .csv 파일 생성) ---
+        // -----------------------------------------------------------------
         {
-            "name": "Python Debugger: Current File",
+            "name": "📦 [RF] 1a. Extract Features (TRAIN split)",
             "type": "debugpy",
             "request": "launch",
-            "program": "/home/a/OpenPCDet/tools/demo.py",
+            "program": "${workspaceFolder}/inference_rf.py", // <-- 이 파일 경로를 확인하세요!
             "console": "integratedTerminal",
             "args": [
-                "--cfg_file", "/home/a/OpenPCDet/tools/cfgs/a2d2_models/second.yaml",
-                //"--extra_tag", "a2d2_lidar_only"
-                //"--ckpt", "/home/a/OpenPCDet/output/a2d2_models/second/a2d2_cyclist_best/ckpt/checkpoint_epoch_200.pth",
-                "--data_path", "data/a2d2/training/velodyne",
-                //"--data_path", "data/a2d2",
-                //"--gt_path", "/home/a/OpenPCDet/data/a2d2/training/label_2"
-                //"--data_path", "/home/a/kitti_bin/000000091.bin"
+                "--mode", "extract",
+                "--split", "train",
+                // 스크립트의 기본 cfg와 ckpt 경로를 사용합니다.
+                // "--cfg_file", "${workspaceFolder}/tools/cfgs/a2d2_models/second.yaml",
+                // "--ckpt", "${workspaceFolder}/output/a2d2_models/second/a2d2_cyclist_best/ckpt/checkpoint_epoch_200.pth",
+                
+                // '--output_csv'를 지정해야 'train' 모드가 읽을 수 있습니다.
+                "--output_csv", "${workspaceFolder}/data/a2d2/features_train.csv"
+            ]
+        },
+        {
+            "name": "📦 [RF] 1b. Extract Features (VAL split)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/inference_rf.py", // <-- 이 파일 경로를 확인하세요!
+            "console": "integratedTerminal",
+            "args": [
+                "--mode", "extract",
+                "--split", "val",
+                // 스크립트의 기본 cfg와 ckpt 경로를 사용합니다.
+                
+                // '--output_csv'를 지정해야 'evaluate' 모드가 읽을 수 있습니다.
+                "--output_csv", "${workspaceFolder}/data/a2d2/features_val.csv"
+            ]
+        },
+
+        // -----------------------------------------------------------------
+        // --- 2단계: RF 모델 학습 (.csv -> .pkl 모델 생성) ---
+        // -----------------------------------------------------------------
+        {
+            "name": "🏋️ [RF] 2. Train RF Models",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/inference_rf.py", // <-- 이 파일 경로를 확인하세요!
+            "console": "integratedTerminal",
+            "args": [
+                "--mode", "train"
+                // 스크립트의 기본 입출력 경로를 사용합니다.
+                // "--train_file", "${workspaceFolder}/data/a2d2/features_train.csv",
+                // "--model1_out", "${workspaceFolder}/data/a2d2/rf_stage1_model.pkl",
+                // "--model2_out", "${workspaceFolder}/data/a2d2/rf_stage2_model.pkl",
+                // "--le_out", "${workspaceFolder}/data/a2d2/le_stage2.pkl"
+            ]
+        },
+
+        // -----------------------------------------------------------------
+        // --- 3단계: RF 모델 평가 (.pkl + .csv -> 정확도 리포트) ---
+        // -----------------------------------------------------------------
+        {
+            "name": "📊 [RF] 3. Evaluate RF Models",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/inference_rf.py", // <-- 이 파일 경로를 확인하세요!
+            "console": "integratedTerminal",
+            "args": [
+                "--mode", "evaluate"
+                // 스크립트의 기본 입출력 경로를 사용합니다.
+                // "--test_file", "${workspaceFolder}/data/a2d2/features_val.csv",
+                // "--model1_path", "${workspaceFolder}/data/a2d2/rf_stage1_model.pkl",
+                // "--model2_path", "${workspaceFolder}/data/a2d2/rf_stage2_model.pkl",
+                // "--le_path", "${workspaceFolder}/data/a2d2/le_stage2.pkl"
+            ]
+        },
+
+        // -----------------------------------------------------------------
+        // --- 4단계: 전체 파이프라인 추론 (RPN -> RF -> 결과) ---
+        // -----------------------------------------------------------------
+        {
+            "name": "🚀 [RF] 4. Run Full Inference (on VAL)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/inference_rf.py", // <-- 이 파일 경로를 확인하세요!
+            "console": "integratedTerminal",
+            "args": [
+                "--mode", "inference",
+                "--split", "val" // 'val' 스플릿으로 추론 (기본값)
+                // 스크립트의 기본 모델 경로들을 모두 사용합니다.
+                // (cfg, ckpt, model1_path, model2_path, le_path)
             ]
         }
     ]

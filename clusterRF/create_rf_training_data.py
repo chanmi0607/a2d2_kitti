@@ -1,4 +1,4 @@
-# create_training_data.py
+# 랜덤 포레스트 학습 데이터 (csv) 생성
 
 import os
 import numpy as np
@@ -6,12 +6,12 @@ import pandas as pd
 from tqdm import tqdm
 
 # 기존 스크립트들에서 필요한 함수들을 가져옵니다.
-from pcdet.datasets.processor.ground_removal_onlyz import read_kitti_bin, remove_ground_by_z_axis
+from ground_removal_onlyz import read_kitti_bin, remove_ground_by_z_axis
 from propose_main import filter_points_by_z_spread
 from pcdet.models.detectors.bev_utils import pointcloud_to_bev
-from pcdet.models.dense_heads.clustering_utils import cluster_bev_image
+from clustering_utils import cluster_bev_image
 from pcdet.models.dense_heads.main_gt_labeling import associate_clusters_with_gt # main_gt_labeling.py에서 함수 임포트
-from pcdet.models.dense_heads.rf_gt_utils import get_a2d2_gt_boxes
+from rf_gt_utils import get_a2d2_gt_boxes
 import cv2
 
 def extract_features_from_points(points):

@@ -1,50 +1,87 @@
 import pandas as pd
-from pathlib import Path
 
-# --- [!] 1. 검증용 파일 경로 2개 ---
-# (이름은 님의 실제 파일명으로 수정하세요)
-
-# 2단계 훈련 때 쓴 검증용 파일 ('Car', 'Cyclist' 등이 있는 파일)
-FOREGROUND_VAL_FILE = 'data/a2d2/new_label/gt_features/gt_test_features.csv'
-
-# 1단계 훈련 때 쓴 검증용 파일 ('Background'만 있는 파일)
-# (주의: 1단계 훈련 파일(gt_test_features.csv)에 'Object'가 섞여있었다면,
-#  그 파일에서 'Background'만 따로 추출해야 합니다.)
-#  가장 쉬운 방법은 pcdet 스크립트로 생성한 background_features_val.csv를 쓰는 것입니다.
-BACKGROUND_VAL_FILE = 'data/a2d2/stage1_background_val_data.csv' 
-
-# --- 2. 최종 저장될 파일 이름 ---
-FINAL_TEST_FILE = 'data/a2d2/final_cascade_test_set.csv'
+# 파일 이름
+file_name = 'data/a2d2/stage1_object_train_features.csv'
 
 try:
-    print(f"포그라운드 파일 로드 중: {FOREGROUND_VAL_FILE}")
-    df_fg = pd.read_csv(FOREGROUND_VAL_FILE)
-    print(f" -> {len(df_fg)}개 샘플 로드됨 (예: Car, Cyclist...)")
-    
-    print(f"백그라운드 파일 로드 중: {BACKGROUND_VAL_FILE}")
-    df_bg = pd.read_csv(BACKGROUND_VAL_FILE)
-    # (pcdet 스크립트 결과물은 이미 'Background' 라벨을 갖고 있음)
-    print(f" -> {len(df_bg)}개 샘플 로드됨 (Background)")
+    # 1. CSV 파일 읽기
+    df = pd.read_csv(file_name)
 
-    # --- 3. 두 데이터프레임 합치기 ---
-    # (컬럼 순서나 개수가 달라도, 공통된 컬럼 기준으로 합쳐짐)
-    final_df = pd.concat([df_fg, df_bg], ignore_index=True)
+    # 2. 유지하려는 레이블 목록 정의
+    labels_to_keep = ['Car', 'Truck', 'Pedestrian']
 
-    # --- 4. 최종 정답지 저장 ---
-    final_df.to_csv(FINAL_TEST_FILE, index=False)
-    
-    print("\n" + "="*50)
-    print(f"✅ '종합 정답지' 생성 완료: {FINAL_TEST_FILE}")
-    print(f"  - 총 샘플 수: {len(final_df)}개")
-    print("  - 최종 라벨 분포:")
-    print(final_df['label'].value_counts())
-    print("="*50)
+    # 3. 'label' 열을 기준으로 필터링
+    # 파일 미리보기에서 첫 번째 열 이름이 'label'인 것을 확인했습니다.
+    filtered_df = df[df['label'].isin(labels_to_keep)]
 
-except FileNotFoundError as e:
-    print(f"[오류] 파일을 찾을 수 없습니다: {e.filename}")
-    print("1, 2번 파일 경로를 정확히 확인해주세요.")
+    # 4. 필터링 결과 확인 (옵션)
+    print("필터링 후 'label' 열의 고유 값:")
+    print(filtered_df['label'].unique())
+
+    # 5. 필터링된 데이터를 새 CSV 파일로 저장
+    output_filename = 'data/a2d2/filtered_stage1_object_train_features.csv'
+    filtered_df.to_csv(output_filename, index=False)
+
+    print(f"\n필터링이 완료되었습니다. 원본 데이터 행 수: {len(df)}")
+    print(f"필터링 후 데이터 행 수: {len(filtered_df)}")
+    print(f"결과가 '{output_filename}' 파일로 저장되었습니다.")
+
+except FileNotFoundError:
+    print(f"오류: '{file_name}' 파일을 찾을 수 없습니다.")
+except KeyError:
+    print("오류: 'label' 열을 찾을 수 없습니다. CSV 파일의 헤더를 확인해주세요.")
 except Exception as e:
-    print(f"[오류] 병합 중 문제 발생: {e}")
+    print(f"알 수 없는 오류가 발생했습니다: {e}")
+
+# # csv 파일 병합 스크립트
+
+# import pandas as pd
+# from pathlib import Path
+
+# # --- [!] 1. 검증용 파일 경로 2개 ---
+# # (이름은 님의 실제 파일명으로 수정하세요)
+
+# # 2단계 훈련 때 쓴 검증용 파일 ('Car', 'Cyclist' 등이 있는 파일)
+# FOREGROUND_VAL_FILE = 'data/a2d2/new_label/gt_features/gt_test_features.csv'
+
+# # 1단계 훈련 때 쓴 검증용 파일 ('Background'만 있는 파일)
+# # (주의: 1단계 훈련 파일(gt_test_features.csv)에 'Object'가 섞여있었다면,
+# #  그 파일에서 'Background'만 따로 추출해야 합니다.)
+# #  가장 쉬운 방법은 pcdet 스크립트로 생성한 background_features_val.csv를 쓰는 것입니다.
+# BACKGROUND_VAL_FILE = 'data/a2d2/stage1_background_val_data.csv' 
+
+# # --- 2. 최종 저장될 파일 이름 ---
+# FINAL_TEST_FILE = 'data/a2d2/final_cascade_test_set.csv'
+
+# try:
+#     print(f"포그라운드 파일 로드 중: {FOREGROUND_VAL_FILE}")
+#     df_fg = pd.read_csv(FOREGROUND_VAL_FILE)
+#     print(f" -> {len(df_fg)}개 샘플 로드됨 (예: Car, Cyclist...)")
+    
+#     print(f"백그라운드 파일 로드 중: {BACKGROUND_VAL_FILE}")
+#     df_bg = pd.read_csv(BACKGROUND_VAL_FILE)
+#     # (pcdet 스크립트 결과물은 이미 'Background' 라벨을 갖고 있음)
+#     print(f" -> {len(df_bg)}개 샘플 로드됨 (Background)")
+
+#     # --- 3. 두 데이터프레임 합치기 ---
+#     # (컬럼 순서나 개수가 달라도, 공통된 컬럼 기준으로 합쳐짐)
+#     final_df = pd.concat([df_fg, df_bg], ignore_index=True)
+
+#     # --- 4. 최종 정답지 저장 ---
+#     final_df.to_csv(FINAL_TEST_FILE, index=False)
+    
+#     print("\n" + "="*50)
+#     print(f"✅ '종합 정답지' 생성 완료: {FINAL_TEST_FILE}")
+#     print(f"  - 총 샘플 수: {len(final_df)}개")
+#     print("  - 최종 라벨 분포:")
+#     print(final_df['label'].value_counts())
+#     print("="*50)
+
+# except FileNotFoundError as e:
+#     print(f"[오류] 파일을 찾을 수 없습니다: {e.filename}")
+#     print("1, 2번 파일 경로를 정확히 확인해주세요.")
+# except Exception as e:
+#     print(f"[오류] 병합 중 문제 발생: {e}")
 
 # import pandas as pd
 

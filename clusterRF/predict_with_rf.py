@@ -1,4 +1,4 @@
-# predict_with_rf.py
+# create pkl 파일
 
 import os
 import numpy as np
@@ -8,10 +8,10 @@ import pickle # pkl 저장을 위해 import
 import joblib # 학습된 RF 모델 로드를 위해 import
 
 # 기존 스크립트들에서 필요한 함수들을 가져옵니다.
-from pcdet.datasets.processor.ground_removal_onlyz import read_kitti_bin, remove_ground_by_z_axis
+from ground_removal_onlyz import read_kitti_bin, remove_ground_by_z_axis
 from propose_main import filter_points_by_z_spread
 from pcdet.models.detectors.bev_utils import pointcloud_to_bev
-from pcdet.models.dense_heads.clustering_utils import cluster_bev_image
+from clustering_utils import cluster_bev_image
 # from pcdet.models.dense_heads.main_gt_labeling import associate_clusters_with_gt # GT는 필요 없음
 # from pcdet.models.dense_heads.rf_gt_utils import get_a2d2_gt_boxes # GT는 필요 없음
 import cv2
@@ -29,7 +29,7 @@ SPLIT_FILE_PATH = 'data/a2d2/ImageSets/val.txt' # 👈 검증하고 싶은 목�
 BASE_DIR = "data/a2d2/training"
 LIDAR_DIR = os.path.join(BASE_DIR, "velodyne")
 
-# 4. 생성될 PKL 파일 경로 (visualize_frame.py의 PKL_PATH와 일치시켜야 함)
+# 4. 생성될 PKL 파일 경로
 OUTPUT_PKL_PATH = 'output/rf_prediction_results.pkl' # 👈 시각화 스크립트가 읽을 경로
 
 # 5. 전처리 파라미터 (create_rf_training_data.py와 동일하게 유지)
@@ -153,7 +153,8 @@ def main():
         frame_boxes_list = []
         
         for cluster_info in clusters:
-            x, y, w, h = cluster_info['box']
+            #x, y, w, h = cluster_info['box']
+            x, y, w, h = cluster_info
             lidar_x_max = BEV_X_RANGE[1] - (y * BEV_RESOLUTION)
             lidar_x_min = BEV_X_RANGE[1] - ((y + h) * BEV_RESOLUTION)
             lidar_y_max = BEV_Y_RANGE[1] - (x * BEV_RESOLUTION)
@@ -215,7 +216,6 @@ def main():
         pickle.dump(all_predictions_list, f)
         
     print(f"\n✅ 예측 완료. 결과가 '{OUTPUT_PKL_PATH}' 파일로 저장되었습니다.")
-    print(f"이제 visualize_frame.py 스크립트의 PKL_PATH를 이 경로로 설정하고 실행하세요.")
 
 
 if __name__ == "__main__":

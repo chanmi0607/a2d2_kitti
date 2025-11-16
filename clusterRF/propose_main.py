@@ -9,10 +9,10 @@ import json
 from collections import defaultdict
 # 로컬 모듈에서 필요한 함수들을 import 합니다.
 #from pcdet.datasets.processor.ground_removal import read_kitti_bin, custom_extract_roi, custom_ransac_plane_fitting
-from pcdet.datasets.processor.ground_removal_onlyz import read_kitti_bin, remove_ground_by_z_axis
+from ground_removal_onlyz import read_kitti_bin, remove_ground_by_z_axis
 from pcdet.models.detectors.bev_utils import pointcloud_to_bev
-from pcdet.models.dense_heads.clustering_utils import cluster_bev_image
-from pcdet.models.dense_heads.classifier_utils import load_model, extract_features
+from clustering_utils import cluster_bev_image
+from classifier_utils import load_model, extract_features
 
 def filter_points_by_z_spread(points: np.ndarray, x_range: tuple, y_range: tuple, resolution: float, z_spread_threshold: float) -> np.ndarray:
     """
@@ -77,7 +77,7 @@ def main():
     MIN_CLUSTER_AREA = 15
     Z_SPREAD_THRESHOLD = 3.5
 
-    MODEL_PATH = "car_detector.joblib"
+    MODEL_PATH = "cluster+rf/car_detector.joblib"
     MAPPING_PATH = "class_mapping.json"
     # ========================================================
 
@@ -91,7 +91,7 @@ def main():
             class_mapping = json.load(f)
         reverse_mapping = {str(v): k for k, v in class_mapping.items()}
     except FileNotFoundError:
-        print(f"'{MAPPING_PATH}'를 찾을 수 없습니다. train_model.py를 먼저 실행하여 클래스 맵 파일을 생성하세요.")
+        print(f"'{MAPPING_PATH}'를 찾을 수 없습니다.")
         return
 
     color_map = [
