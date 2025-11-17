@@ -60,13 +60,32 @@
         // --- 3단계: RF 모델 평가 (.pkl + .csv -> 정확도 리포트) ---
         // -----------------------------------------------------------------
         {
-            "name": "📊 [RF] 3. Evaluate RF Models",
+            "name": "📊 [RF] 3-1. Evaluate RF Models",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/inference_rf.py", // <-- 이 파일 경로를 확인하세요!
             "console": "integratedTerminal",
             "args": [
                 "--mode", "evaluate"
+                // 스크립트의 기본 입출력 경로를 사용합니다.
+                // "--test_file", "${workspaceFolder}/data/a2d2/features_val.csv",
+                // "--model1_path", "${workspaceFolder}/data/a2d2/rf_stage1_model.pkl",
+                // "--model2_path", "${workspaceFolder}/data/a2d2/rf_stage2_model.pkl",
+                // "--le_path", "${workspaceFolder}/data/a2d2/le_stage2.pkl"
+            ]
+        },
+
+        // -----------------------------------------------------------------
+        // --- 3단계: RF 모델 평가 (.pkl + .csv -> 정확도 리포트) ---
+        // -----------------------------------------------------------------
+        {
+            "name": "📊 [RF] 3-2. Evaluate RF Models by GT",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/inference_rf.py", // <-- 이 파일 경로를 확인하세요!
+            "console": "integratedTerminal",
+            "args": [
+                "--mode", "evaluate gt"
                 // 스크립트의 기본 입출력 경로를 사용합니다.
                 // "--test_file", "${workspaceFolder}/data/a2d2/features_val.csv",
                 // "--model1_path", "${workspaceFolder}/data/a2d2/rf_stage1_model.pkl",
