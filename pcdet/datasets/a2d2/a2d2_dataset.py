@@ -440,29 +440,10 @@ class A2D2Dataset(DatasetTemplate):
 
         if 'annos' in info:
             # get_infos의 process_single_scene과 동일한 로직 적용
-            obj_list = self.get_label(sample_idx)
+            # obj_list = self.get_label(sample_idx)
             annos = {}
-            
-            if len(obj_list) == 0:
-                # 빈 annotations 처리
-                annos['name'] = np.array([])
-                annos['truncated'] = np.array([])
-                annos['occluded'] = np.array([])
-                annos['alpha'] = np.array([])
-                annos['bbox'] = np.zeros((0, 4))
-                annos['dimensions'] = np.zeros((0, 3))
-                annos['location'] = np.zeros((0, 3))
-                annos['rotation_y'] = np.array([])
-            else:
-                annos['name'] = np.array([obj.cls_type for obj in obj_list])
-                annos['truncated'] = np.array([obj.truncation for obj in obj_list])
-                annos['occluded'] = np.array([obj.occlusion for obj in obj_list])
-                annos['alpha'] = np.array([obj.alpha for obj in obj_list])
-                annos['bbox'] = np.concatenate([obj.box2d.reshape(1, 4) for obj in obj_list], axis=0)
-                annos['dimensions'] = np.array([[obj.l, obj.h, obj.w] for obj in obj_list])
-                annos['location'] = np.concatenate([obj.loc.reshape(1, 3) for obj in obj_list], axis=0)
-                annos['rotation_y'] = np.array([obj.ry for obj in obj_list])
-            
+            annos = info['annos']
+
             # DontCare 클래스 필터링
             annos = common_utils.drop_info_with_name(annos, name='DontCare')
 
@@ -515,8 +496,9 @@ class A2D2Dataset(DatasetTemplate):
 
         input_dict['calib'] = calib
         data_dict = self.prepare_data(data_dict=input_dict)
-
+                              
         data_dict['image_shape'] = img_shape
+
         return data_dict
 
 
