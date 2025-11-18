@@ -208,7 +208,27 @@ class DatasetTemplate(torch_data.Dataset):
         data_dict = self.data_processor.forward(
             data_dict=data_dict
         )
-
+        # ==================================================================
+        # [수정] gt_boxes와 gt_names 개수 동기화 (Sync)
+        # data_processor가 박스만 지우고 이름은 안 지웠으므로,
+        # 살아남은 박스의 '클래스 ID(마지막 열)'를 보고 이름을 다시 채워넣습니다.
+        # ==================================================================
+        if 'gt_boxes' in data_dict and len(data_dict['gt_boxes']) > 0:
+            # gt_boxes의 마지막 컬럼(-1)은 위에서 붙인 Class ID (1, 2, 3...)입니다.
+            # Class ID는 1부터 시작하므로, 인덱스(0부터 시작)로 쓰려면 -1을 해줘야 합니다.
+            
+            # 1. 살아남은 박스들의 클래스 ID 추출
+            cls_ids = data_dict['gt_boxes'][:, -1].astype(np.int32)
+            
+            # 2. ID를 다시 이름 문자열로 변환 (self.class_names 리스트 참조)
+            # 예: ID 1 -> index 0 -> 'Car'
+            data_dict['gt_names'] = np.array([self.class_names[i - 1] for i in cls_ids])
+            
+        elif 'gt_boxes' in data_dict and len(data_dict['gt_boxes']) == 0:
+            # 박스가 다 지워졌다면 이름도 비워야 함
+            data_dict['gt_names'] = np.array([])
+        # ==================================================================
+        
         if self.training and len(data_dict['gt_boxes']) == 0:
             new_index = np.random.randint(self.__len__())
             return self.__getitem__(new_index)

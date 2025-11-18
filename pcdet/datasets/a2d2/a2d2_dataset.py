@@ -495,12 +495,8 @@ class A2D2Dataset(DatasetTemplate):
             input_dict["trans_lidar_to_cam"], input_dict["trans_cam_to_img"] = a2d2_utils.calib_to_matricies(calib)
 
         input_dict['calib'] = calib
-        # temp = input_dict.get('gt_names', np.array([]))
         data_dict = self.prepare_data(data_dict=input_dict)
-        
-        # if 'gt_names' not in data_dict and 'gt_names' in input_dict:
-        #     data_dict['gt_names'] = temp
-                      
+                              
         data_dict['image_shape'] = img_shape
 
         return data_dict

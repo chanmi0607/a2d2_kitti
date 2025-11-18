@@ -44,8 +44,36 @@ def extract_and_save_features(dataset, model, args, logger):
             
             raw_points_np = data_dict['points']
 
-            gt_boxes_np = data_dict['gt_boxes']
-            gt_names = data_dict.pop('gt_names', np.array([]))
+            gt_boxes_np = data_dict.get('gt_boxes', np.zeros((0, 7), dtype=np.float32))
+            gt_names_np = data_dict.pop('gt_names', np.array([]))
+            # ------------------------------------------------------------
+            # [거리 제한 필터링 로직]
+            # ------------------------------------------------------------
+            if len(gt_boxes_np) > 0:
+                # 1. 거리 계산 (LiDAR 원점 기준)
+                dist = np.sqrt(gt_boxes_np[:, 0]**2 + gt_boxes_np[:, 1]**2)
+                
+                # 2. 30m 이내 마스크 생성 (길이: 38)
+                mask_30m = dist <= 30.0
+                
+                # 3. 마스크 적용 (gt_boxes와 gt_names를 동시에 줄임 -> 길이: 24)
+                gt_boxes_np = gt_boxes_np[mask_30m]
+                gt_names_np = gt_names_np[mask_30m] # 여기서 이름도 같이 줄어듦
+
+                # 4. data_dict 업데이트 (GPU로 보낼 gt_boxes는 줄어든 것으로 교체)
+                data_dict['gt_boxes'] = gt_boxes_np
+                data_dict['gt_names'] = gt_names_np
+            # ------------------------------------------------------------
+
+            # ------------------------------------------------------------
+            # [핵심 수정] GPU 로드 에러 방지 (문자열 제거)
+            # ------------------------------------------------------------
+            # 1. 나중에 매칭에 쓸 이름은 변수에 따로 저장해둠
+            final_gt_names = gt_names_np 
+            
+            # 2. 딕셔너리에서는 'gt_names'를 삭제! (그래야 load_data_to_gpu가 에러 안 남)
+            if 'gt_names' in data_dict:
+                data_dict.pop('gt_names')
 
             data_dict_batch = dataset.collate_batch([data_dict])
             load_data_to_gpu(data_dict_batch)
@@ -62,7 +90,24 @@ def extract_and_save_features(dataset, model, args, logger):
 
             rpn_boxes_np_filtered = post_nms_boxes_tensor.cpu().numpy()
             rpn_scores_np_filtered = post_nms_scores_tensor.cpu().numpy().reshape(-1, 1)
+            # ============================================================
+            # [추가] RPN 박스 30m 거리 제한 필터링
+            # ============================================================
+            if rpn_boxes_np_filtered.shape[0] > 0:
+                # 1. 거리 계산 (sqrt(x^2 + y^2))
+                rpn_dist = np.sqrt(rpn_boxes_np_filtered[:, 0]**2 + rpn_boxes_np_filtered[:, 1]**2)
+                
+                # 2. 30m 이내 마스크 생성
+                rpn_mask_30m = rpn_dist <= 30.0
+                
+                # 3. 필터링 적용 (박스와 점수 모두 적용)
+                rpn_boxes_np_filtered = rpn_boxes_np_filtered[rpn_mask_30m]
+                rpn_scores_np_filtered = rpn_scores_np_filtered[rpn_mask_30m]
 
+            # 필터링 후 남은 박스가 없으면 건너뛰기
+            if rpn_boxes_np_filtered.shape[0] == 0:
+                continue
+            
             # ============================================================
             # [수정됨] 시각화 보정 파트
             # ============================================================
@@ -102,7 +147,7 @@ def extract_and_save_features(dataset, model, args, logger):
             final_features_np = np.concatenate((final_rpn_features_np, point_features_np), axis=1)
 
             matched_labels, matched_ious_np = match_rpn_to_gt_for_training(
-                final_boxes_np, gt_boxes_np, gt_names, 
+                final_boxes_np, gt_boxes_np, final_gt_names, 
                 args.fg_thresh, args.bg_thresh
             )
 

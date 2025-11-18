@@ -147,8 +147,36 @@ def run_evaluation_gt(args, cfg, logger):
 
             gt_boxes_all = data_dict['gt_boxes']
             gt_boxes_all = gt_boxes_all[:, :7].astype(np.float32)  # (N, 7) 크기로 자르기 (필요시)
+            gt_names_np = data_dict.pop('gt_names', np.array([]))
+            # ------------------------------------------------------------
+            # [거리 제한 필터링 로직]
+            # ------------------------------------------------------------
+            if len(gt_boxes_all) > 0:
+                # 1. 거리 계산 (LiDAR 원점 기준)
+                dist = np.sqrt(gt_boxes_all[:, 0]**2 + gt_boxes_all[:, 1]**2)
+                
+                # 2. 30m 이내 마스크 생성 (길이: 38)
+                mask_30m = dist <= 30.0
+                
+                # 3. 마스크 적용 (gt_boxes와 gt_names를 동시에 줄임 -> 길이: 24)
+                gt_boxes_all = gt_boxes_all[mask_30m]
+                gt_names_np = gt_names_np[mask_30m] # 여기서 이름도 같이 줄어듦
 
-            gt_names_all = data_dict.pop('gt_names', np.array([]))
+                # 4. data_dict 업데이트 (GPU로 보낼 gt_boxes는 줄어든 것으로 교체)
+                data_dict['gt_boxes'] = gt_boxes_all
+                data_dict['gt_names'] = gt_names_np
+            # ------------------------------------------------------------
+
+            # ------------------------------------------------------------
+            # [핵심 수정] GPU 로드 에러 방지 (문자열 제거)
+            # ------------------------------------------------------------
+            # 1. 나중에 매칭에 쓸 이름은 변수에 따로 저장해둠
+            final_gt_names = gt_names_np 
+            
+            # 2. 딕셔너리에서는 'gt_names'를 삭제! (그래야 load_data_to_gpu가 에러 안 남)
+            if 'gt_names' in data_dict:
+                data_dict.pop('gt_names')
+                
 
             data_dict_batch = dataset.collate_batch([data_dict])
             load_data_to_gpu(data_dict_batch)
@@ -159,9 +187,22 @@ def run_evaluation_gt(args, cfg, logger):
             # RPN 결과
             post_nms_boxes = pred_dicts[0]['pred_boxes'].cpu().numpy()
             post_nms_scores = pred_dicts[0]['pred_scores'].cpu().numpy().reshape(-1, 1)
+            # ============================================================
+            # [추가] RPN 박스 30m 거리 제한 필터링
+            # ============================================================
+            if post_nms_boxes.shape[0] > 0:
+                # 1. 거리 계산 (sqrt(x^2 + y^2))
+                rpn_dist = np.sqrt(post_nms_boxes[:, 0]**2 + post_nms_boxes[:, 1]**2)
+                
+                # 2. 30m 이내 마스크 생성
+                rpn_mask_30m = rpn_dist <= 30.0
+                
+                # 3. 필터링 적용 (박스와 점수 모두 적용)
+                post_nms_boxes = post_nms_boxes[rpn_mask_30m]
+                post_nms_scores = post_nms_scores[rpn_mask_30m]
 
             if post_nms_boxes.shape[0] == 0:
-                for g_name in gt_names_all:
+                for g_name in final_gt_names:
                     det_stats[g_name]['fn'] += 1
                     det_stats[g_name]['gt_count'] += 1
                 continue
@@ -210,7 +251,7 @@ def run_evaluation_gt(args, cfg, logger):
             # =========================================================
             if len(final_boxes) > 0:
                 matched_labels_for_cls, _ = match_rpn_to_gt_for_training(
-                    final_boxes, gt_boxes_all, gt_names_all, 
+                    final_boxes, gt_boxes_all, final_gt_names, 
                     fg_iou_thresh=args.fg_thresh, bg_iou_thresh=args.bg_thresh
                 )
                 
@@ -234,13 +275,13 @@ def run_evaluation_gt(args, cfg, logger):
                 det_pred_labels = np.array([])
 
             # 2-2. 클래스별 IoU 매칭 및 TP/FP/FN 계산
-            unique_classes = set(gt_names_all) | set(det_pred_labels)
+            unique_classes = set(final_gt_names) | set(det_pred_labels)
             
             for cls_name in unique_classes:
                 if cls_name == 'Background': continue
 
                 # 해당 클래스의 GT 박스들
-                cls_gt_indices = [i for i, name in enumerate(gt_names_all) if name == cls_name]
+                cls_gt_indices = [i for i, name in enumerate(final_gt_names) if name == cls_name]
                 cls_gt_boxes = gt_boxes_all[cls_gt_indices] if len(cls_gt_indices) > 0 else np.array([])
                 
                 # 해당 클래스의 예측 박스들
