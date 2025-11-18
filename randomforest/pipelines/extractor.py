@@ -101,9 +101,6 @@ def extract_and_save_features(dataset, model, args, logger):
             final_rpn_features_np = np.concatenate((final_scores_np, final_boxes_np), axis=1)
             final_features_np = np.concatenate((final_rpn_features_np, point_features_np), axis=1)
 
-            
-
-
             matched_labels, matched_ious_np = match_rpn_to_gt_for_training(
                 final_boxes_np, gt_boxes_np, gt_names, 
                 args.fg_thresh, args.bg_thresh

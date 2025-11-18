@@ -15,7 +15,7 @@ def match_rpn_to_gt_for_training(rpn_boxes, gt_boxes, gt_labels, fg_iou_thresh=0
     if gt_boxes.shape[0] == 0:
         # GT가 없으면 모두 "Background"
         return ["Background"] * num_rpn_boxes, np.zeros(num_rpn_boxes, dtype=np.float32)
-
+    gt_boxes = gt_boxes[:, :7].astype(np.float32)  # (N, 7) 크기로 자르기 (필요시)
     ious = iou3d_nms_utils.boxes_iou3d_gpu(
         torch.from_numpy(rpn_boxes).cuda(),
         torch.from_numpy(gt_boxes).cuda()
