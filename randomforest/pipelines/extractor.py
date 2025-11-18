@@ -5,7 +5,7 @@ import pandas as pd
 from pathlib import Path
 
 from pcdet.models import load_data_to_gpu
-from randomforest.dataset.gt_parser import load_gt_boxes
+#from randomforest.dataset.gt_parser import load_gt_boxes
 from randomforest.features.point_ops import extract_point_features_cpu
 from randomforest.features.matcher import match_rpn_to_gt_for_training
 from randomforest.config import ML_FEATURE_COLUMNS
@@ -43,12 +43,12 @@ def extract_and_save_features(dataset, model, args, logger):
             frame_id = data_dict['frame_id']
             
             raw_points_np = data_dict['points']
+
+            gt_boxes_np = data_dict['gt_boxes']
+            gt_names = data_dict.get('gt_names', [])
+
             data_dict_batch = dataset.collate_batch([data_dict])
             load_data_to_gpu(data_dict_batch)
-
-            # 4-6. GT 매칭
-            gt_txt_path = gt_label_dir / f"{frame_id}.txt"
-            gt_boxes_np, gt_names = load_gt_boxes(gt_txt_path)
 
             # 4-2. 모델 추론 (RPN + NMS)
             with torch.no_grad():

@@ -307,7 +307,7 @@ class Detector3DTemplate(nn.Module):
 
                 print(f"[INFO] Pre-NMS boxes visualized: {boxes_np_vis.shape[0]} / {boxes_np_raw.shape[0]}")
 
-                V.draw_scenes(points=points_np, ref_boxes=boxes_np_vis)
+                #V.draw_scenes(points=points_np, ref_boxes=boxes_np_vis)
 
 
 
@@ -330,29 +330,29 @@ class Detector3DTemplate(nn.Module):
                 final_labels = label_preds[selected]
                 final_boxes = box_preds[selected]
 
-                boxes_np = final_boxes.detach().cpu().numpy()
+                # boxes_np = final_boxes.detach().cpu().numpy()
 
-                pc_range = [-75.2, -75.2, -2, 75.2, 75.2, 6]
-                x_min, y_min, z_min, x_max, y_max, z_max = pc_range
+                # pc_range = [-75.2, -75.2, -2, 75.2, 75.2, 6]
+                # x_min, y_min, z_min, x_max, y_max, z_max = pc_range
 
-                # --- 2. box center 기준 필터링 ---
-                # box_preds 형태: [N, 7] → (x, y, z, dx, dy, dz, heading)
-                cx, cy, cz = boxes_np[:, 0], boxes_np[:, 1], boxes_np[:, 2]
+                # # --- 2. box center 기준 필터링 ---
+                # # box_preds 형태: [N, 7] → (x, y, z, dx, dy, dz, heading)
+                # cx, cy, cz = boxes_np[:, 0], boxes_np[:, 1], boxes_np[:, 2]
 
-                mask_valid = (
-                    (cx >= x_min) & (cx <= x_max) &
-                    (cy >= y_min) & (cy <= y_max) &
-                    (cz >= z_min) & (cz <= z_max)
-                )
+                # mask_valid = (
+                #     (cx >= x_min) & (cx <= x_max) &
+                #     (cy >= y_min) & (cy <= y_max) &
+                #     (cz >= z_min) & (cz <= z_max)
+                # )
 
-                boxes_np_valid = boxes_np[mask_valid]
+                # boxes_np_valid = boxes_np[mask_valid]
 
 
-                # ✅ (선택) 시각화
-                V.draw_scenes(
-                    points=points_np,
-                    ref_boxes=boxes_np_valid
-                )
+                # # ✅ (선택) 시각화
+                # V.draw_scenes(
+                #     points=points_np,
+                #     ref_boxes=boxes_np_valid
+                # )
                     
             recall_dict = self.generate_recall_record(
                 box_preds=final_boxes if 'rois' not in batch_dict else src_box_preds,

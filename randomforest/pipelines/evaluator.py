@@ -14,7 +14,7 @@ from pcdet.ops.iou3d_nms import iou3d_nms_utils
 
 from randomforest.config import STAGE_1_OBJECT_LABEL , ML_FEATURE_COLUMNS
 from randomforest.dataset.dataset_loader import setup_dataset
-from randomforest.dataset.gt_parser import load_gt_boxes
+#from randomforest.dataset.gt_parser import load_gt_boxes
 from randomforest.features.point_ops import extract_point_features_cpu
 from randomforest.features.matcher import match_rpn_to_gt_for_training
 
@@ -140,9 +140,16 @@ def run_evaluation_gt(args, cfg, logger):
         frame_id = ""
         try:
             # --- A. 데이터 로드 및 RPN ---
-            data_dict = dataset[index]; frame_id = data_dict['frame_id']
-            data_dict_batch = dataset.collate_batch([data_dict]); load_data_to_gpu(data_dict_batch)
-            raw_points_np = dataset.get_lidar(frame_id)
+            data_dict = dataset[index]
+            frame_id = data_dict['frame_id']
+
+            raw_points_np = data_dict['points']
+
+            gt_boxes_all = data_dict['gt_boxes']
+            gt_names_all = data_dict['gt_names']
+
+            data_dict_batch = dataset.collate_batch([data_dict])
+            load_data_to_gpu(data_dict_batch)
 
             with torch.no_grad():
                 pred_dicts, _ = pcdet_model(data_dict_batch)
@@ -152,9 +159,6 @@ def run_evaluation_gt(args, cfg, logger):
             post_nms_scores = pred_dicts[0]['pred_scores'].cpu().numpy().reshape(-1, 1)
 
             if post_nms_boxes.shape[0] == 0:
-                # RPN이 아무것도 못 찾은 경우 -> 이 프레임의 모든 GT는 FN 처리됨
-                gt_txt_path = dataset.gt_label_dir / f"{frame_id}.txt"
-                gt_boxes_all, gt_names_all = load_gt_boxes(gt_txt_path)
                 for g_name in gt_names_all:
                     det_stats[g_name]['fn'] += 1
                     det_stats[g_name]['gt_count'] += 1
@@ -195,8 +199,8 @@ def run_evaluation_gt(args, cfg, logger):
                 current_pred_labels = []
 
             # --- C. Ground Truth 로드 ---
-            gt_txt_path = dataset.gt_label_dir / f"{frame_id}.txt"
-            gt_boxes_all, gt_names_all = load_gt_boxes(gt_txt_path) # (N, 7), List
+            # gt_txt_path = dataset.gt_label_dir / f"{frame_id}.txt"
+            # gt_boxes_all, gt_names_all = load_gt_boxes(gt_txt_path) # (N, 7), List
 
             # =========================================================
             # [평가 1] 분류 성능 (Classifier Performance)
