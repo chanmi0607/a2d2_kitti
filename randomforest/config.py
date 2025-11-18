@@ -36,8 +36,8 @@ def parse_config():
     
     # --- 3. 'extract' 전용 인자 ---
     parser.add_argument('--output_csv', type=str, default=None, help='(extract) Path to save the output CSV file.')
-    parser.add_argument('--fg_thresh', type=float, default=0.1, help='(extract) IoU threshold for "Foreground"')
-    parser.add_argument('--bg_thresh', type=float, default=0.5, help='(extract) IoU threshold for "Background"')
+    parser.add_argument('--fg_thresh', type=float, default=0.3, help='(extract) IoU threshold for "Foreground"')
+    parser.add_argument('--bg_thresh', type=float, default=0.1, help='(extract) IoU threshold for "Background"')
 
     # --- 4. 'train' 모드 인자 ---
     parser.add_argument('--train_file', type=str, default='data/a2d2/features_train.csv', help='(train) Path to the training features CSV')

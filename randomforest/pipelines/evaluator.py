@@ -8,6 +8,11 @@ import pandas as pd
 import numpy as np
 import time
 from sklearn.metrics import classification_report, accuracy_score
+
+import logging
+from datetime import datetime
+from pathlib import Path
+
 # pcdet 관련
 from pcdet.models import build_network, load_data_to_gpu
 from pcdet.ops.iou3d_nms import iou3d_nms_utils
@@ -109,6 +114,25 @@ def run_evaluation(args, logger):
 
 def run_evaluation_gt(args, cfg, logger):
     logger.info('----------------- Mode: Full Evaluation (Classification + Detection) -----------------')
+    # ------------------------------------------------------------------
+    # [추가] 로그 파일 설정 (현재 시간 기반)
+    # ------------------------------------------------------------------
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_dir = Path("logs") # 로그 파일 저장 경로 (원하는 곳으로 수정 가능)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    
+    log_file = log_dir / f"eval_result_{timestamp}.txt"
+    
+    # 파일 핸들러 생성 및 로거에 추가
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(message)s') # 시간 포맷 설정
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+    
+    # 시작 메시지 (파일에도 기록됨)
+    logger.info(f"Evaluation started at {timestamp}. Log file: {log_file}")
+    logger.info('----------------- Mode: Full Evaluation (Classification + Detection) -----------------')
 
     # ------------------------------------------------------------------
     # 1. 초기화
@@ -132,7 +156,7 @@ def run_evaluation_gt(args, cfg, logger):
     # 2. 검출 성능용 (Detection Metric)
     # 클래스별 {tp, fp, fn} 카운트
     det_stats = defaultdict(lambda: {'tp': 0, 'fp': 0, 'fn': 0, 'gt_count': 0})
-    iou_threshold = 0.1  # 검출 성공 기준 IoU
+    iou_threshold = 0.3  # 검출 성공 기준 IoU
 
     logger.info(f"Starting evaluation on {len(dataset)} frames...")
     
@@ -379,3 +403,7 @@ def run_evaluation_gt(args, cfg, logger):
     m_f1 = 2 * (m_prec * m_rec) / (m_prec + m_rec) if (m_prec + m_rec) > 0 else 0
     logger.info(f"{'Micro Avg':<15} {m_prec:.4f}     {m_rec:.4f}     {m_f1:.4f}     {total_tp+total_fn:<10}")
     logger.info("="*60)
+
+    logger.info(f"Evaluation finished. Results saved to {log_file}")
+    logger.removeHandler(file_handler)
+    file_handler.close()

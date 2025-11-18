@@ -43,9 +43,9 @@ def run_training_stage1(df_train, logger):
     
     # 2. 모델 정의 및 학습
     model_s1 = RandomForestClassifier(
-        n_estimators=100, random_state=42, n_jobs=-1,
-        max_depth=15, min_samples_leaf=5,
-        class_weight='balanced'
+        n_estimators=300, random_state=42, n_jobs=-1,
+        max_depth=30, min_samples_leaf=2,
+        class_weight='balanced_subsample'
     )
     model_s1.fit(X_s1, y_s1)
     
@@ -71,7 +71,7 @@ def run_training_stage2(df_train, logger):
     logger.info(f"2단계 학습 샘플: {len(X_s2)}개")
     logger.info(f"2단계 클래스: {le.classes_}")
 
-    model_s2 = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1, max_depth=10, min_samples_leaf=3)
+    model_s2 = RandomForestClassifier(n_estimators=400, random_state=42, n_jobs=-1, max_depth=40, min_samples_leaf=2, class_weight='balanced_subsample')
     model_s2.fit(X_s2, y_s2_numeric)
     acc_s2 = accuracy_score(y_s2_numeric, model_s2.predict(X_s2))
     logger.info(f"2단계 학습 정확도: {acc_s2 * 100:.2f}%")
