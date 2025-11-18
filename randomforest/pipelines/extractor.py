@@ -42,9 +42,13 @@ def extract_and_save_features(dataset, model, args, logger):
             data_dict = dataset[index]
             frame_id = data_dict['frame_id']
             
-            raw_points_np = dataset.get_lidar(frame_id)
+            raw_points_np = data_dict['points']
             data_dict_batch = dataset.collate_batch([data_dict])
             load_data_to_gpu(data_dict_batch)
+
+            # 4-6. GT 매칭
+            gt_txt_path = gt_label_dir / f"{frame_id}.txt"
+            gt_boxes_np, gt_names = load_gt_boxes(gt_txt_path)
 
             # 4-2. 모델 추론 (RPN + NMS)
             with torch.no_grad():
@@ -60,22 +64,22 @@ def extract_and_save_features(dataset, model, args, logger):
             rpn_scores_np_filtered = post_nms_scores_tensor.cpu().numpy().reshape(-1, 1)
 
             # ============================================================
-            # [수정됨] RPN 박스 시각화 보정 파트
+            # [수정됨] 시각화 보정 파트
             # ============================================================
             if not args.no_vis and index < args.vis_frame_limit:
                 logger.info(f"Visualizing frame {frame_id}...")
                 try:
-                    # 원본 훼손 방지를 위해 복사
+                    # 1. RPN 박스 복사 및 회전축 반전 (필수)
                     vis_rpn_boxes = rpn_boxes_np_filtered.copy() 
-                    
-                    # 시각화 실행 (보정된 vis_rpn_boxes 사용)
-                    V.draw_scenes(
-                        points=raw_points_np[:, :3], # 포인트 클라우드 (흰색/회색)
-                        gt_boxes=gt_boxes_np,        # 정답 박스 (초록색)
-                        ref_boxes=vis_rpn_boxes,     # 예측 박스 (빨간색) -> 보정됨
-                        ref_scores=final_scores_np.flatten() # (선택) 점수에 따라 색상 진하기 변경
-                    )
+                    vis_gt_boxes = gt_boxes_np.copy()
 
+                    # 시각화 실행
+                    V.draw_scenes(
+                        points=raw_points_np[:, :3], 
+                        gt_boxes=vis_gt_boxes,       # 수정된 GT 사용
+                        ref_boxes=vis_rpn_boxes,     # 수정된 RPN 사용
+                        ref_scores=rpn_scores_np_filtered.flatten() 
+                    )
                 except ImportError:
                     logger.warning("Visual_utils or Mayavi/Open3D not found. Skipping visualization.")
                 except Exception as e:
@@ -97,9 +101,7 @@ def extract_and_save_features(dataset, model, args, logger):
             final_rpn_features_np = np.concatenate((final_scores_np, final_boxes_np), axis=1)
             final_features_np = np.concatenate((final_rpn_features_np, point_features_np), axis=1)
 
-            # 4-6. GT 매칭
-            gt_txt_path = gt_label_dir / f"{frame_id}.txt"
-            gt_boxes_np, gt_names = load_gt_boxes(gt_txt_path)
+            
 
 
             matched_labels, matched_ious_np = match_rpn_to_gt_for_training(
