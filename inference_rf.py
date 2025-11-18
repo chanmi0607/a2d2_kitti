@@ -1,5 +1,5 @@
 from randomforest.pipelines.evaluator import run_evaluation, run_evaluation_gt
-from randomforest.pipelines.inferencer import run_inference
+from randomforest.pipelines.inference import run_inference
 from randomforest.pipelines.trainer import run_training
 from randomforest.pipelines.extractor import run_extraction
 from randomforest.config import parse_config           
