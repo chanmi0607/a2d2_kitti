@@ -59,6 +59,28 @@ def extract_and_save_features(dataset, model, args, logger):
             rpn_boxes_np_filtered = post_nms_boxes_tensor.cpu().numpy()
             rpn_scores_np_filtered = post_nms_scores_tensor.cpu().numpy().reshape(-1, 1)
 
+            # ============================================================
+            # [수정됨] RPN 박스 시각화 보정 파트
+            # ============================================================
+            if not args.no_vis and index < args.vis_frame_limit:
+                logger.info(f"Visualizing frame {frame_id}...")
+                try:
+                    # 원본 훼손 방지를 위해 복사
+                    vis_rpn_boxes = rpn_boxes_np_filtered.copy() 
+                    
+                    # 시각화 실행 (보정된 vis_rpn_boxes 사용)
+                    V.draw_scenes(
+                        points=raw_points_np[:, :3], # 포인트 클라우드 (흰색/회색)
+                        gt_boxes=gt_boxes_np,        # 정답 박스 (초록색)
+                        ref_boxes=vis_rpn_boxes,     # 예측 박스 (빨간색) -> 보정됨
+                        ref_scores=final_scores_np.flatten() # (선택) 점수에 따라 색상 진하기 변경
+                    )
+
+                except ImportError:
+                    logger.warning("Visual_utils or Mayavi/Open3D not found. Skipping visualization.")
+                except Exception as e:
+                    logger.error(f"Visualization failed: {e}")
+
             # 4-3. 포인트 기반 피처 추출
             point_features_np, valid_indices_np = extract_point_features_cpu(
                 raw_points_np, rpn_boxes_np_filtered, args.min_points_in_box, logger
@@ -78,28 +100,6 @@ def extract_and_save_features(dataset, model, args, logger):
             # 4-6. GT 매칭
             gt_txt_path = gt_label_dir / f"{frame_id}.txt"
             gt_boxes_np, gt_names = load_gt_boxes(gt_txt_path)
-
-            # ============================================================
-            # [수정됨] RPN 박스 시각화 보정 파트
-            # ============================================================
-            if not args.no_vis and index < args.vis_frame_limit:
-                logger.info(f"Visualizing frame {frame_id}...")
-                try:
-                    # 원본 훼손 방지를 위해 복사
-                    vis_rpn_boxes = final_boxes_np.copy() 
-                    
-                    # 시각화 실행 (보정된 vis_rpn_boxes 사용)
-                    V.draw_scenes(
-                        points=raw_points_np[:, :3], # 포인트 클라우드 (흰색/회색)
-                        gt_boxes=gt_boxes_np,        # 정답 박스 (초록색)
-                        ref_boxes=vis_rpn_boxes,     # 예측 박스 (빨간색) -> 보정됨
-                        ref_scores=final_scores_np.flatten() # (선택) 점수에 따라 색상 진하기 변경
-                    )
-
-                except ImportError:
-                    logger.warning("Visual_utils or Mayavi/Open3D not found. Skipping visualization.")
-                except Exception as e:
-                    logger.error(f"Visualization failed: {e}")
 
 
             matched_labels, matched_ious_np = match_rpn_to_gt_for_training(

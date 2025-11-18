@@ -307,7 +307,7 @@ class Detector3DTemplate(nn.Module):
 
                 print(f"[INFO] Pre-NMS boxes visualized: {boxes_np_vis.shape[0]} / {boxes_np_raw.shape[0]}")
 
-                #V.draw_scenes(points=points_np, ref_boxes=boxes_np_vis)
+                V.draw_scenes(points=points_np, ref_boxes=boxes_np_vis)
 
 
 
