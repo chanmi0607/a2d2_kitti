@@ -146,7 +146,9 @@ def run_evaluation_gt(args, cfg, logger):
             raw_points_np = data_dict['points']
 
             gt_boxes_all = data_dict['gt_boxes']
-            gt_names_all = data_dict['gt_names']
+            gt_boxes_all = gt_boxes_all[:, :7].astype(np.float32)  # (N, 7) 크기로 자르기 (필요시)
+
+            gt_names_all = data_dict.pop('gt_names', np.array([]))
 
             data_dict_batch = dataset.collate_batch([data_dict])
             load_data_to_gpu(data_dict_batch)

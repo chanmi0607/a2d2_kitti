@@ -45,7 +45,7 @@ def extract_and_save_features(dataset, model, args, logger):
             raw_points_np = data_dict['points']
 
             gt_boxes_np = data_dict['gt_boxes']
-            gt_names = data_dict.get('gt_names', [])
+            gt_names = data_dict.pop('gt_names', np.array([]))
 
             data_dict_batch = dataset.collate_batch([data_dict])
             load_data_to_gpu(data_dict_batch)

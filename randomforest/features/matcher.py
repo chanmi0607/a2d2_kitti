@@ -3,7 +3,7 @@ import numpy as np
 
 from pcdet.ops.iou3d_nms import iou3d_nms_utils
 
-def match_rpn_to_gt_for_training(rpn_boxes, gt_boxes, gt_labels, fg_iou_thresh=0.2, bg_iou_thresh=0.4):
+def match_rpn_to_gt_for_training(rpn_boxes, gt_boxes, gt_names, fg_iou_thresh=0.2, bg_iou_thresh=0.4):
     """
     RPN box를 GT box와 IoU 매칭.
     - IoU >= fg_thresh: Foreground (e.g., "Car")
@@ -28,7 +28,7 @@ def match_rpn_to_gt_for_training(rpn_boxes, gt_boxes, gt_labels, fg_iou_thresh=0
     for i in range(num_rpn_boxes):
         best_iou = best_ious_np[i]
         if best_iou >= fg_iou_thresh:
-            matched_labels.append(gt_labels[best_gt_indices[i]])
+            matched_labels.append(gt_names[best_gt_indices[i]])
         elif best_iou < bg_iou_thresh:
             matched_labels.append("Background")
         else:

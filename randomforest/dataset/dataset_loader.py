@@ -42,7 +42,9 @@ def setup_dataset(cfg, args, logger):
             return None  # 실패 시 None 반환
         
         dataset.gt_label_dir = gt_label_dir
-        # 4. 성공 시 데이터셋 반환
+        # 4. 30M거리 제한 설정
+        
+        # 5. 성공 시 데이터셋 반환
         return dataset
 
     except Exception as e:
