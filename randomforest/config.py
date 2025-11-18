@@ -14,6 +14,9 @@ ML_FEATURE_COLUMNS = [
 CSV_COLUMNS = ML_FEATURE_COLUMNS + ["label", "max_iou", "frame_id"]
 # RF Stage 1의 'Object' 라벨 (학습 시 1로 인코딩됨)
 STAGE_1_OBJECT_LABEL = 1
+##
+##cm test
+##
 
 # --- 설정 파싱 함수 (수정) ---
 def parse_config():
