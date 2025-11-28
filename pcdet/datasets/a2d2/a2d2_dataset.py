@@ -106,10 +106,17 @@ class A2D2Dataset(DatasetTemplate):
         return image
 
     def get_image_shape(self, idx):
+        # 확장자가 png인지 jpg인지 확인 필요, 폴더명이 image_2 인지 확인 필요
         img_file = self.root_split_path / 'image_2' / ('%s.png' % idx)
-        assert img_file.exists()
+        
+        # [수정] 파일이 없으면 경로를 출력하고 죽도록 변경
+        if not img_file.exists():
+            print(f"\n[ERROR] Cannot find image file: {img_file}")
+            print(f"[CHECK] Please check directory: {self.root_split_path / 'image_2'}")
+            
+        assert img_file.exists(), f"Image file not found: {img_file}"
+        
         return np.array(io.imread(img_file).shape[:2], dtype=np.int32)
-
     def get_label(self, idx):
         label_file = self.root_split_path / 'label_2' / ('%s.txt' % idx)
         assert label_file.exists()
@@ -553,7 +560,8 @@ if __name__ == '__main__':
         create_a2d2_infos(
             dataset_cfg=dataset_cfg,
             #class_names=['Car','Truck','UtilityVehicle','Cyclist','Bicycle','MotorBiker','Bus','Trailer','Pedestrian'],
-            class_names=['Car','Truck','UtilityVehicle','Cyclist','Bus','Trailer','Pedestrian'],
+            # class_names=['Car','Truck','UtilityVehicle','Cyclist','Bus','Trailer','Pedestrian'],
+            class_names=['Car','Truck','Pedestrian'],
             data_path=ROOT_DIR / 'data' / 'a2d2',
             save_path=ROOT_DIR / 'data' / 'a2d2'
         )

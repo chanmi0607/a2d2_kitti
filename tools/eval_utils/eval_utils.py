@@ -119,15 +119,21 @@ def eval_one_epoch(cfg, args, model, dataloader, epoch_id, logger, dist_test=Fal
     logger.info('Average predicted number of objects(%d samples): %.3f'
                 % (len(det_annos), total_pred_objects / max(1, len(det_annos))))
 
+    # --- [디버깅 코드 추가] ---
+    print("DEBUG: Start Pickle Dump...")
     with open(result_dir / 'result.pkl', 'wb') as f:
         pickle.dump(det_annos, f)
-
+    print("DEBUG: Pickle Dump Done. Start Evaluation...")
+    
+    # 여기서 죽을 확률이 높음
     result_str, result_dict = dataset.evaluation(
         det_annos, class_names,
         eval_metric=cfg.MODEL.POST_PROCESSING.EVAL_METRIC,
         output_path=final_output_dir
     )
-
+    print("DEBUG: Evaluation Done.")
+    # -------------------------
+    
     logger.info(result_str)
     ret_dict.update(result_dict)
 

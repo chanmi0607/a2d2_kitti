@@ -15,6 +15,7 @@ from .once.once_dataset import ONCEDataset
 #from .argo2.argo2_dataset import Argo2Dataset
 from .custom.custom_dataset import CustomDataset
 from .a2d2.a2d2_dataset import A2D2Dataset
+from .isaacsim.isaacsim_dataset import IsaacSimDataset
 
 
 __all__ = {
@@ -27,7 +28,8 @@ __all__ = {
     'ONCEDataset': ONCEDataset,
     'CustomDataset': CustomDataset,
 #    'Argo2Dataset': Argo2Dataset,
-    'A2D2Dataset': A2D2Dataset
+    'A2D2Dataset': A2D2Dataset,
+    'IsaacSimDataset':IsaacSimDataset
 }
 
 

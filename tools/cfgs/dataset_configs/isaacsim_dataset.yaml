@@ -1,9 +1,9 @@
 # CLASS_NAMES: ['Car','Truck','UtilityVehicle','Cyclist','Bicycle','MotorBiker','Bus','Trailer','Pedestrian']
 # CLASS_NAMES: ['Car','Truck','UtilityVehicle','Cyclist','Bus','Trailer','Pedestrian']
-CLASS_NAMES: ['Car','Truck','Pedestrian']
+CLASS_NAMES: ['Truck']
 
-DATASET: 'A2D2Dataset'
-DATA_PATH: '/home/a/a2d2_kitti/data/a2d2'
+DATASET: 'IsaacSimDataset'
+DATA_PATH: '/home/a/a2d2_kitti/data/isaacsim'
 
 POINT_CLOUD_RANGE: [-75.2, -75.2, -2, 75.2, 75.2, 6]
 DATA_SPLIT: {
@@ -12,8 +12,8 @@ DATA_SPLIT: {
 }
 
 INFO_PATH: {
-    'train': [/home/a/a2d2_kitti/data/a2d2/a2d2_infos_train.pkl],
-    'test': [/home/a/a2d2_kitti/data/a2d2/a2d2_infos_val.pkl],
+    'train': [/home/a/a2d2_kitti/data/isaacsim/isasc_infos_train.pkl],
+    'test': [/home/a/a2d2_kitti/data/isaacsim/isasc_infos_val.pkl],
 }
 
 GET_ITEM_LIST: ["points"]
@@ -26,18 +26,18 @@ DATA_AUGMENTOR:
         - NAME: gt_sampling
           USE_ROAD_PLANE: False # A2D2 데이터셋에는 도로 평면 정보가 없으므로 False로 설정
           DB_INFO_PATH:
-              - /home/a/a2d2_kitti/data/a2d2/a2d2_dbinfos_train.pkl
+              - /home/a/a2d2_kitti/data/isascsim/isasc_dbinfos_train.pkl
           PREPARE: {
              # 각 클래스별 최소 포인트 수를 지정해 너무 작은 객체는 제외
             #  filter_by_min_points: ['Car:5', 'Pedestrian:5', 'Bicycle:5', 'Truck:5', 'UtilityVehicle:5', 'MotorBiker:5', 'Bus:5', 'Trailer:5', 'Cyclist:5'],
             #  filter_by_min_points: ['Car:5', 'Pedestrian:5', 'Truck:5', 'UtilityVehicle:5', 'Bus:5', 'Trailer:5', 'Cyclist:5'],
-            filter_by_min_points: ['Car:5', 'Truck:5', 'Pedestrian:5'],
+            filter_by_min_points: ['Truck:5'],
              filter_by_difficulty: [-1],
           }
 
           # 각 클래스 별 샘플링 개수 지정
           # SAMPLE_GROUPS: ['Car:20','Pedestrian:10', 'Bicycle:10', 'Truck:10', 'UtilityVehicle:5', 'MotorBiker:5', 'Bus:10', 'Trailer:5', 'Cyclist:5']
-          SAMPLE_GROUPS: ['Car:20','Truck:10','Pedestrian:10']
+          SAMPLE_GROUPS: ['Truck:10']
           NUM_POINT_FEATURES: 4
           DATABASE_WITH_FAKELIDAR: False
           REMOVE_EXTRA_WIDTH: [0.0, 0.0, 0.0]
