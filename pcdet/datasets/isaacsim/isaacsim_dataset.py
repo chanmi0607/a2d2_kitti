@@ -13,23 +13,58 @@ import concurrent.futures as futures
 
 class IsaacSimDataset(DatasetTemplate):
     def __init__(self, dataset_cfg, class_names, training=True, root_path=None, logger=None):
-        """
-        Args:
-            root_path:
-            dataset_cfg:
-            class_names:
-            training:
-            logger:
-        """
         super().__init__(
             dataset_cfg=dataset_cfg, class_names=class_names, training=training, root_path=root_path, logger=logger
         )
+        
+        # 1. 모드 확인 ('train', 'val', 'test')
         self.split = self.dataset_cfg.DATA_SPLIT[self.mode]
-        self.root_split_path = self.root_path / ('training' if self.split != 'test' else 'testing')
+        
+        # 2. [수정됨] 폴더 선택 로직 (지역변수 split_dir -> 멤버변수 self.root_split_path)
+        if self.split == 'test':
+            self.root_split_path = self.root_path / 'testing'
+        else:
+            self.root_split_path = self.root_path / 'training'
+        # 3. 실제 LiDAR 데이터 경로 설정
+        # 구조: /training/velodyne_points/data/*.bin
+        lidar_dir = self.root_split_path / 'velodyne_points' / 'data'
+        
 
-        split_dir = self.root_path / 'ImageSets' / (self.split + '.txt')
-        self.sample_id_list = [x.strip() for x in open(split_dir).readlines()] if split_dir.exists() else None
+        if not lidar_dir.exists():
+            print(f"Warning: LiDAR directory not found at {lidar_dir}")
+            self.sample_id_list = []
+        else:
+            # 4. 파일 스캔 (ID 리스트 생성)
+            # .bin 파일들을 읽어서 정렬 (순서가 섞이지 않도록 sorted 필수)
+            file_list = sorted(list(lidar_dir.glob('*.bin')))
+            all_ids = [file.stem for file in file_list] # 확장자 제외한 ID만 추출
 
+            # 5. Train / Validation 분할 로직
+            # 'test' 모드일 때는 testing 폴더의 모든 파일을 사용
+            if self.split == 'test':
+                self.sample_id_list = all_ids
+            else:
+                # 'training' 폴더 안에 있는 데이터를 train용과 val용으로 나눔
+                # 예: 전체의 80%는 학습용, 뒤쪽 20%는 검증용
+                # (데이터가 섞여있지 않고 순서대로라고 가정)
+                total_len = len(all_ids)
+                split_idx = int(total_len * 0.8) # 8:2 비율 (조절 가능)
+
+                if self.split == 'train':
+                    self.sample_id_list = all_ids[:split_idx]
+                elif self.split == 'val':
+                    self.sample_id_list = all_ids[split_idx:]
+                else:
+                    # 'trainval' 등의 옵션이 있을 경우 전체 사용
+                    self.sample_id_list = all_ids
+
+        # 로그 출력
+        if logger is not None:
+             logger.info(f'Total samples for IsaacSim dataset ({self.split}): {len(self.sample_id_list)}')
+        
+        # [중요] include_isaac_data는 이제 리스트를 만드는 역할이 아니라, 
+        # 만들어진 self.sample_id_list를 정보를 로딩하는 역할만 해야 함.
+        # (만약 include_isaac_data 함수 안에서 또 파일을 읽는다면 그 부분은 지워야 합니다)
         self.isaac_infos = []
         self.include_isaac_data(self.mode)
 
@@ -52,20 +87,48 @@ class IsaacSimDataset(DatasetTemplate):
             self.logger.info('Total samples for Isaac dataset: %d' % (len(isaac_infos)))
 
     def set_split(self, split):
+        # 부모 클래스 초기화 (기본 설정 유지)
         super().__init__(
             dataset_cfg=self.dataset_cfg, class_names=self.class_names, training=self.training, root_path=self.root_path, logger=self.logger
         )
         self.split = split
+        
+        # 1. 루트 경로 설정 (Training vs Testing)
         self.root_split_path = self.root_path / ('training' if self.split != 'test' else 'testing')
 
-        split_dir = self.root_path / 'ImageSets' / (self.split + '.txt')
-        self.sample_id_list = [x.strip() for x in open(split_dir).readlines()] if split_dir.exists() else None
+        # 2. LiDAR 데이터 경로 설정
+        # 구조: /training/velodyne_points/data/*.bin
+        lidar_dir = self.root_split_path / 'velodyne_points' / 'data'
+
+        # 3. 파일 스캔 및 리스트 생성 (기존 txt 파일 읽는 코드 삭제)
+        if not lidar_dir.exists():
+            print(f"Warning: LiDAR directory not found at {lidar_dir}")
+            self.sample_id_list = []
+        else:
+            # 파일 읽기 (.bin)
+            file_list = sorted(list(lidar_dir.glob('*.bin')))
+            all_ids = [file.stem for file in file_list]
+            
+            # 4. Train / Val 데이터 분할 (8:2 비율)
+            if self.split == 'test':
+                self.sample_id_list = all_ids
+            else:
+                total_len = len(all_ids)
+                split_idx = int(total_len * 0.8) # 80% 지점 계산
+
+                if self.split == 'train':
+                    self.sample_id_list = all_ids[:split_idx]
+                elif self.split == 'val':
+                    self.sample_id_list = all_ids[split_idx:]
+                else:
+                    self.sample_id_list = all_ids
 
     def get_lidar(self, idx):
-        lidar_file = self.root_split_path / 'velodyne' / ('%s.bin' % idx)
-        assert lidar_file.exists()
+        # [수정] 경로를 velodyne -> velodyne_points/data 로 변경
+        lidar_file = self.root_split_path / 'velodyne_points' / 'data' / ('%s.bin' % idx)
+        assert lidar_file.exists(), f"File not found: {lidar_file}"
         return np.fromfile(str(lidar_file), dtype=np.float32).reshape(-1, 4)
-
+    
     def get_label(self, idx):
         label_file = self.root_split_path / 'label_2' / ('%s.txt' % idx)
         assert label_file.exists()
@@ -320,15 +383,15 @@ class IsaacSimDataset(DatasetTemplate):
 
     def __len__(self):
         if self._merge_all_iters_to_one_epoch:
-            return len(self.kitti_infos) * self.total_epochs
+            return len(self.isaac_infos) * self.total_epochs
 
-        return len(self.kitti_infos)
+        return len(self.isaac_infos)
 
     def __getitem__(self, index):
         if self._merge_all_iters_to_one_epoch:
-            index = index % len(self.kitti_infos)
+            index = index % len(self.isaac_infos)
 
-        info = copy.deepcopy(self.kitti_infos[index])
+        info = copy.deepcopy(self.isaac_infos[index])
         sample_idx = info['point_cloud']['lidar_idx']
         
         # [삭제/변경] 이미지 형식이 없으므로 더미 값 혹은 삭제
@@ -438,7 +501,7 @@ def create_isaacsim_infos(dataset_cfg, class_names, data_path, save_path, worker
 
 if __name__ == '__main__':
     import sys
-    if sys.argv.__len__() > 1 and sys.argv[1] == 'create_isaac_infos':
+    if sys.argv.__len__() > 1 and sys.argv[1] == 'create_isaacsim_infos':
         import yaml
         from pathlib import Path
         from easydict import EasyDict
@@ -447,6 +510,6 @@ if __name__ == '__main__':
         create_isaacsim_infos(
             dataset_cfg=dataset_cfg,
             class_names=['Truck'],
-            data_path=ROOT_DIR / 'data' / 'isaac',
-            save_path=ROOT_DIR / 'data' / 'isaac'
+            data_path=ROOT_DIR / 'data' / 'isaacsim',
+            save_path=ROOT_DIR / 'data' / 'isaacsim'
         )

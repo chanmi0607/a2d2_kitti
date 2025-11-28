@@ -5,15 +5,15 @@ CLASS_NAMES: ['Truck']
 DATASET: 'IsaacSimDataset'
 DATA_PATH: '/home/a/a2d2_kitti/data/isaacsim'
 
-POINT_CLOUD_RANGE: [-75.2, -75.2, -2, 75.2, 75.2, 6]
+POINT_CLOUD_RANGE: [-50.4, -50.4, -2, 50.4, 50.4, 6]
 DATA_SPLIT: {
     'train': 'train',
     'test': 'val'
 }
 
 INFO_PATH: {
-    'train': [/home/a/a2d2_kitti/data/isaacsim/isasc_infos_train.pkl],
-    'test': [/home/a/a2d2_kitti/data/isaacsim/isasc_infos_val.pkl],
+    'train': [/home/a/a2d2_kitti/data/isaacsim/isaac_infos_train.pkl],
+    'test': [/home/a/a2d2_kitti/data/isaacsim/isaac_infos_val.pkl],
 }
 
 GET_ITEM_LIST: ["points"]
@@ -26,13 +26,13 @@ DATA_AUGMENTOR:
         - NAME: gt_sampling
           USE_ROAD_PLANE: False # A2D2 데이터셋에는 도로 평면 정보가 없으므로 False로 설정
           DB_INFO_PATH:
-              - /home/a/a2d2_kitti/data/isascsim/isasc_dbinfos_train.pkl
+              - /home/a/a2d2_kitti/data/isaacsim/isaac_dbinfos_train.pkl
           PREPARE: {
              # 각 클래스별 최소 포인트 수를 지정해 너무 작은 객체는 제외
             #  filter_by_min_points: ['Car:5', 'Pedestrian:5', 'Bicycle:5', 'Truck:5', 'UtilityVehicle:5', 'MotorBiker:5', 'Bus:5', 'Trailer:5', 'Cyclist:5'],
             #  filter_by_min_points: ['Car:5', 'Pedestrian:5', 'Truck:5', 'UtilityVehicle:5', 'Bus:5', 'Trailer:5', 'Cyclist:5'],
             filter_by_min_points: ['Truck:5'],
-             filter_by_difficulty: [-1],
+            filter_by_difficulty: [],
           }
 
           # 각 클래스 별 샘플링 개수 지정
@@ -57,7 +57,7 @@ DATA_AUGMENTOR:
 
 POINT_FEATURE_ENCODING: {
     encoding_type: absolute_coordinates_encoding,
-    used_feature_list: ['x', 'y', 'z', 'intT','Pedensity'],
+    used_feature_list: ['x', 'y', 'z', 'intensity'],
     src_feature_list: ['x', 'y', 'z', 'intensity'],
 }
 
