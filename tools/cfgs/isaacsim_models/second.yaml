@@ -1,4 +1,4 @@
-CLASS_NAMES: ['Truck']
+CLASS_NAMES: ['Truck','Pedestrian']
 #CLASS_NAMES: ['Car','Truck','UtilityVehicle','Cyclist','Bicycle','MotorBiker','Bus','Trailer','Pedestrian']
 #CLASS_NAMES: ['Car','Cyclist','Pedestrian']
 
@@ -41,6 +41,16 @@ MODEL:
             {
                 'class_name': 'Truck',
                 'anchor_sizes': [[2.12, 15.00, 3.08]], 
+                'anchor_rotations': [0, 1.57],
+                'anchor_bottom_heights': [0.0],
+                'align_center': False,
+                'feature_map_stride': 8,
+                'matched_threshold': 0.5,
+                'unmatched_threshold': 0.35
+            },
+            {
+                'class_name': 'Pedestrian',
+                'anchor_sizes': [[1.95, 0.57, 0.57]], 
                 'anchor_rotations': [0, 1.57],
                 'anchor_bottom_heights': [0.0],
                 'align_center': False,
