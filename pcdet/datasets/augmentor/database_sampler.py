@@ -22,6 +22,12 @@ class DataBaseSampler(object):
         self.img_aug_iou_thresh = sampler_cfg.get('IMG_AUG_IOU_THRESH', 0.5)
 
         self.logger = logger
+        # [디버깅 코드 추가] -----------------------------------------
+        print(f"\n[DEBUG] DatabaseSampler initialized!")
+        print(f"[DEBUG] Target Class Names (Model Config): {self.class_names}")
+        print(f"[DEBUG] Configured Sample Groups: {sampler_cfg.SAMPLE_GROUPS}")
+        # ---------------------------------------------------------
+
         self.db_infos = {}
         for class_name in class_names:
             self.db_infos[class_name] = []
@@ -39,7 +45,21 @@ class DataBaseSampler(object):
 
             with open(str(db_info_path), 'rb') as f:
                 infos = pickle.load(f)
+                
+                # [디버깅 코드 시작] -------------------------------------------------------
+                print(f"\n[DEBUG] Loading PKL file: {db_info_path}")
+                print(f"[DEBUG] Keys in PKL: {list(infos.keys())}")
+                if 'Truck' in infos:
+                    print(f"[DEBUG] Raw 'Truck' count in PKL: {len(infos['Truck'])}")
+                    if len(infos['Truck']) > 0:
+                        print(f"[DEBUG] Sample[0] Difficulty: {infos['Truck'][0]['difficulty']}")
+                        print(f"[DEBUG] Sample[0] Points: {infos['Truck'][0]['num_points_in_gt']}")
+                else:
+                    print(f"[DEBUG] 'Truck' key NOT FOUND in PKL!")
+                # [디버깅 코드 끝] ---------------------------------------------------------
+
                 [self.db_infos[cur_class].extend(infos[cur_class]) for cur_class in class_names]
+
 
         for func_name, val in sampler_cfg.PREPARE.items():
             self.db_infos = getattr(self, func_name)(self.db_infos, val)
@@ -102,12 +122,25 @@ class DataBaseSampler(object):
         new_db_infos = {}
         for key, dinfos in db_infos.items():
             pre_len = len(dinfos)
-            new_db_infos[key] = [
-                info for info in dinfos
-                if info['difficulty'] not in removed_difficulty
-            ]
+            
+            # [디버깅 코드 수정] 리스트 컴프리헨션을 풀어서 로그 추가
+            new_db_infos[key] = []
+            dropped_count = 0
+            for info in dinfos:
+                if info['difficulty'] not in removed_difficulty:
+                    new_db_infos[key].append(info)
+                else:
+                    dropped_count += 1
+                    # 너무 많이 출력되면 보기 힘드니 앞쪽 5개만 출력
+                    if dropped_count <= 5: 
+                        print(f"[DEBUG] Dropped {key} due to difficulty: {info['difficulty']} (Allowed removed: {removed_difficulty})")
+            
             if self.logger is not None:
                 self.logger.info('Database filter by difficulty %s: %d => %d' % (key, pre_len, len(new_db_infos[key])))
+            
+            # [추가 로그]
+            print(f"[DEBUG] Filter Difficulty Result for {key}: {pre_len} -> {len(new_db_infos[key])}")
+            
         return new_db_infos
 
     def filter_by_min_points(self, db_infos, min_gt_points_list):
@@ -116,17 +149,27 @@ class DataBaseSampler(object):
             min_num = int(min_num)
             if min_num > 0 and name in db_infos.keys():
                 filtered_infos = []
+                dropped_count = 0 # 디버깅용 카운터
+                
                 for info in db_infos[name]:
                     if info['num_points_in_gt'] >= min_num:
                         filtered_infos.append(info)
+                    else:
+                        # [디버깅 코드 추가] 왜 떨어졌는지 출력
+                        dropped_count += 1
+                        if dropped_count <= 5:
+                             print(f"[DEBUG] Dropped {name} due to points: {info['num_points_in_gt']} < {min_num}")
 
                 if self.logger is not None:
                     self.logger.info('Database filter by min points %s: %d => %d' %
                                      (name, len(db_infos[name]), len(filtered_infos)))
+                
+                # [추가 로그]
+                print(f"[DEBUG] Filter MinPoints Result for {name}: {len(db_infos[name])} -> {len(filtered_infos)}")
+                
                 db_infos[name] = filtered_infos
 
         return db_infos
-
     def sample_with_fixed_number(self, class_name, sample_group):
         """
         Args:

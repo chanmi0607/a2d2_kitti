@@ -8,13 +8,18 @@ import pandas as pd
 import numpy as np
 import time
 from sklearn.metrics import classification_report, accuracy_score
+
+import logging
+from datetime import datetime
+from pathlib import Path
+
 # pcdet 관련
 from pcdet.models import build_network, load_data_to_gpu
 from pcdet.ops.iou3d_nms import iou3d_nms_utils
 
 from randomforest.config import STAGE_1_OBJECT_LABEL , ML_FEATURE_COLUMNS
 from randomforest.dataset.dataset_loader import setup_dataset
-from randomforest.dataset.gt_parser import load_gt_boxes
+#from randomforest.dataset.gt_parser import load_gt_boxes
 from randomforest.features.point_ops import extract_point_features_cpu
 from randomforest.features.matcher import match_rpn_to_gt_for_training
 
@@ -109,6 +114,25 @@ def run_evaluation(args, logger):
 
 def run_evaluation_gt(args, cfg, logger):
     logger.info('----------------- Mode: Full Evaluation (Classification + Detection) -----------------')
+    # ------------------------------------------------------------------
+    # [추가] 로그 파일 설정 (현재 시간 기반)
+    # ------------------------------------------------------------------
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_dir = Path("logs") # 로그 파일 저장 경로 (원하는 곳으로 수정 가능)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    
+    log_file = log_dir / f"eval_result_{timestamp}.txt"
+    
+    # 파일 핸들러 생성 및 로거에 추가
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(message)s') # 시간 포맷 설정
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+    
+    # 시작 메시지 (파일에도 기록됨)
+    logger.info(f"Evaluation started at {timestamp}. Log file: {log_file}")
+    logger.info('----------------- Mode: Full Evaluation (Classification + Detection) -----------------')
 
     # ------------------------------------------------------------------
     # 1. 초기화
@@ -132,7 +156,7 @@ def run_evaluation_gt(args, cfg, logger):
     # 2. 검출 성능용 (Detection Metric)
     # 클래스별 {tp, fp, fn} 카운트
     det_stats = defaultdict(lambda: {'tp': 0, 'fp': 0, 'fn': 0, 'gt_count': 0})
-    iou_threshold = 0.1  # 검출 성공 기준 IoU
+    iou_threshold = 0.3  # 검출 성공 기준 IoU
 
     logger.info(f"Starting evaluation on {len(dataset)} frames...")
     
@@ -140,9 +164,46 @@ def run_evaluation_gt(args, cfg, logger):
         frame_id = ""
         try:
             # --- A. 데이터 로드 및 RPN ---
-            data_dict = dataset[index]; frame_id = data_dict['frame_id']
-            data_dict_batch = dataset.collate_batch([data_dict]); load_data_to_gpu(data_dict_batch)
-            raw_points_np = dataset.get_lidar(frame_id)
+            data_dict = dataset[index]
+            frame_id = data_dict['frame_id']
+
+            raw_points_np = data_dict['points']
+
+            gt_boxes_all = data_dict['gt_boxes']
+            gt_boxes_all = gt_boxes_all[:, :7].astype(np.float32)  # (N, 7) 크기로 자르기 (필요시)
+            gt_names_np = data_dict.pop('gt_names', np.array([]))
+            # ------------------------------------------------------------
+            # [거리 제한 필터링 로직]
+            # ------------------------------------------------------------
+            if len(gt_boxes_all) > 0:
+                # 1. 거리 계산 (LiDAR 원점 기준)
+                dist = np.sqrt(gt_boxes_all[:, 0]**2 + gt_boxes_all[:, 1]**2)
+                
+                # 2. 30m 이내 마스크 생성 (길이: 38)
+                mask_30m = dist <= 30.0
+                
+                # 3. 마스크 적용 (gt_boxes와 gt_names를 동시에 줄임 -> 길이: 24)
+                gt_boxes_all = gt_boxes_all[mask_30m]
+                gt_names_np = gt_names_np[mask_30m] # 여기서 이름도 같이 줄어듦
+
+                # 4. data_dict 업데이트 (GPU로 보낼 gt_boxes는 줄어든 것으로 교체)
+                data_dict['gt_boxes'] = gt_boxes_all
+                data_dict['gt_names'] = gt_names_np
+            # ------------------------------------------------------------
+
+            # ------------------------------------------------------------
+            # [핵심 수정] GPU 로드 에러 방지 (문자열 제거)
+            # ------------------------------------------------------------
+            # 1. 나중에 매칭에 쓸 이름은 변수에 따로 저장해둠
+            final_gt_names = gt_names_np 
+            
+            # 2. 딕셔너리에서는 'gt_names'를 삭제! (그래야 load_data_to_gpu가 에러 안 남)
+            if 'gt_names' in data_dict:
+                data_dict.pop('gt_names')
+                
+
+            data_dict_batch = dataset.collate_batch([data_dict])
+            load_data_to_gpu(data_dict_batch)
 
             with torch.no_grad():
                 pred_dicts, _ = pcdet_model(data_dict_batch)
@@ -150,12 +211,22 @@ def run_evaluation_gt(args, cfg, logger):
             # RPN 결과
             post_nms_boxes = pred_dicts[0]['pred_boxes'].cpu().numpy()
             post_nms_scores = pred_dicts[0]['pred_scores'].cpu().numpy().reshape(-1, 1)
+            # ============================================================
+            # [추가] RPN 박스 30m 거리 제한 필터링
+            # ============================================================
+            if post_nms_boxes.shape[0] > 0:
+                # 1. 거리 계산 (sqrt(x^2 + y^2))
+                rpn_dist = np.sqrt(post_nms_boxes[:, 0]**2 + post_nms_boxes[:, 1]**2)
+                
+                # 2. 30m 이내 마스크 생성
+                rpn_mask_30m = rpn_dist <= 30.0
+                
+                # 3. 필터링 적용 (박스와 점수 모두 적용)
+                post_nms_boxes = post_nms_boxes[rpn_mask_30m]
+                post_nms_scores = post_nms_scores[rpn_mask_30m]
 
             if post_nms_boxes.shape[0] == 0:
-                # RPN이 아무것도 못 찾은 경우 -> 이 프레임의 모든 GT는 FN 처리됨
-                gt_txt_path = dataset.gt_label_dir / f"{frame_id}.txt"
-                gt_boxes_all, gt_names_all = load_gt_boxes(gt_txt_path)
-                for g_name in gt_names_all:
+                for g_name in final_gt_names:
                     det_stats[g_name]['fn'] += 1
                     det_stats[g_name]['gt_count'] += 1
                 continue
@@ -195,8 +266,8 @@ def run_evaluation_gt(args, cfg, logger):
                 current_pred_labels = []
 
             # --- C. Ground Truth 로드 ---
-            gt_txt_path = dataset.gt_label_dir / f"{frame_id}.txt"
-            gt_boxes_all, gt_names_all = load_gt_boxes(gt_txt_path) # (N, 7), List
+            # gt_txt_path = dataset.gt_label_dir / f"{frame_id}.txt"
+            # gt_boxes_all, gt_names_all = load_gt_boxes(gt_txt_path) # (N, 7), List
 
             # =========================================================
             # [평가 1] 분류 성능 (Classifier Performance)
@@ -204,7 +275,7 @@ def run_evaluation_gt(args, cfg, logger):
             # =========================================================
             if len(final_boxes) > 0:
                 matched_labels_for_cls, _ = match_rpn_to_gt_for_training(
-                    final_boxes, gt_boxes_all, gt_names_all, 
+                    final_boxes, gt_boxes_all, final_gt_names, 
                     fg_iou_thresh=args.fg_thresh, bg_iou_thresh=args.bg_thresh
                 )
                 
@@ -228,13 +299,13 @@ def run_evaluation_gt(args, cfg, logger):
                 det_pred_labels = np.array([])
 
             # 2-2. 클래스별 IoU 매칭 및 TP/FP/FN 계산
-            unique_classes = set(gt_names_all) | set(det_pred_labels)
+            unique_classes = set(final_gt_names) | set(det_pred_labels)
             
             for cls_name in unique_classes:
                 if cls_name == 'Background': continue
 
                 # 해당 클래스의 GT 박스들
-                cls_gt_indices = [i for i, name in enumerate(gt_names_all) if name == cls_name]
+                cls_gt_indices = [i for i, name in enumerate(final_gt_names) if name == cls_name]
                 cls_gt_boxes = gt_boxes_all[cls_gt_indices] if len(cls_gt_indices) > 0 else np.array([])
                 
                 # 해당 클래스의 예측 박스들
@@ -332,3 +403,7 @@ def run_evaluation_gt(args, cfg, logger):
     m_f1 = 2 * (m_prec * m_rec) / (m_prec + m_rec) if (m_prec + m_rec) > 0 else 0
     logger.info(f"{'Micro Avg':<15} {m_prec:.4f}     {m_rec:.4f}     {m_f1:.4f}     {total_tp+total_fn:<10}")
     logger.info("="*60)
+
+    logger.info(f"Evaluation finished. Results saved to {log_file}")
+    logger.removeHandler(file_handler)
+    file_handler.close()

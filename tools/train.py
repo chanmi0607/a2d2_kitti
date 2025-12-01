@@ -217,7 +217,8 @@ def main():
         show_gpu_stat=not args.wo_gpu_stat,
         use_amp=args.use_amp,
         cfg=cfg,
-        test_loader=test_loader,
+        # test_loader=test_loader,
+        test_loader=None,
         args=args
     )
 

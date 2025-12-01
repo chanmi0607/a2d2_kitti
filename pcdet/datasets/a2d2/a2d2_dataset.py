@@ -106,10 +106,17 @@ class A2D2Dataset(DatasetTemplate):
         return image
 
     def get_image_shape(self, idx):
+        # 확장자가 png인지 jpg인지 확인 필요, 폴더명이 image_2 인지 확인 필요
         img_file = self.root_split_path / 'image_2' / ('%s.png' % idx)
-        assert img_file.exists()
+        
+        # [수정] 파일이 없으면 경로를 출력하고 죽도록 변경
+        if not img_file.exists():
+            print(f"\n[ERROR] Cannot find image file: {img_file}")
+            print(f"[CHECK] Please check directory: {self.root_split_path / 'image_2'}")
+            
+        assert img_file.exists(), f"Image file not found: {img_file}"
+        
         return np.array(io.imread(img_file).shape[:2], dtype=np.int32)
-
     def get_label(self, idx):
         label_file = self.root_split_path / 'label_2' / ('%s.txt' % idx)
         assert label_file.exists()
@@ -440,29 +447,10 @@ class A2D2Dataset(DatasetTemplate):
 
         if 'annos' in info:
             # get_infos의 process_single_scene과 동일한 로직 적용
-            obj_list = self.get_label(sample_idx)
+            # obj_list = self.get_label(sample_idx)
             annos = {}
-            
-            if len(obj_list) == 0:
-                # 빈 annotations 처리
-                annos['name'] = np.array([])
-                annos['truncated'] = np.array([])
-                annos['occluded'] = np.array([])
-                annos['alpha'] = np.array([])
-                annos['bbox'] = np.zeros((0, 4))
-                annos['dimensions'] = np.zeros((0, 3))
-                annos['location'] = np.zeros((0, 3))
-                annos['rotation_y'] = np.array([])
-            else:
-                annos['name'] = np.array([obj.cls_type for obj in obj_list])
-                annos['truncated'] = np.array([obj.truncation for obj in obj_list])
-                annos['occluded'] = np.array([obj.occlusion for obj in obj_list])
-                annos['alpha'] = np.array([obj.alpha for obj in obj_list])
-                annos['bbox'] = np.concatenate([obj.box2d.reshape(1, 4) for obj in obj_list], axis=0)
-                annos['dimensions'] = np.array([[obj.l, obj.h, obj.w] for obj in obj_list])
-                annos['location'] = np.concatenate([obj.loc.reshape(1, 3) for obj in obj_list], axis=0)
-                annos['rotation_y'] = np.array([obj.ry for obj in obj_list])
-            
+            annos = info['annos']
+
             # DontCare 클래스 필터링
             annos = common_utils.drop_info_with_name(annos, name='DontCare')
 
@@ -515,8 +503,9 @@ class A2D2Dataset(DatasetTemplate):
 
         input_dict['calib'] = calib
         data_dict = self.prepare_data(data_dict=input_dict)
-
+                              
         data_dict['image_shape'] = img_shape
+
         return data_dict
 
 
@@ -571,7 +560,8 @@ if __name__ == '__main__':
         create_a2d2_infos(
             dataset_cfg=dataset_cfg,
             #class_names=['Car','Truck','UtilityVehicle','Cyclist','Bicycle','MotorBiker','Bus','Trailer','Pedestrian'],
-            class_names=['Car','Truck','UtilityVehicle','Cyclist','Bus','Trailer','Pedestrian'],
+            # class_names=['Car','Truck','UtilityVehicle','Cyclist','Bus','Trailer','Pedestrian'],
+            class_names=['Car','Truck','Pedestrian'],
             data_path=ROOT_DIR / 'data' / 'a2d2',
             save_path=ROOT_DIR / 'data' / 'a2d2'
         )
