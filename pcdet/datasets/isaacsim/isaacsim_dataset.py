@@ -326,6 +326,11 @@ class IsaacSimDataset(DatasetTemplate):
 # ---------------------------------------------------------------------------- #
 
 def create_isaacsim_infos(dataset_cfg, class_names, data_path, save_path, workers=4):
+    # =========================================================
+    # [설정] True로 설정하면 Test 데이터만 생성하고 나머지는 건너뜁니다.
+    ONLY_TEST = False  
+    # =========================================================
+
     # 1. 초기 데이터셋 인스턴스 생성
     dataset = IsaacSimDataset(dataset_cfg=dataset_cfg, class_names=class_names, root_path=data_path, training=False)
     
@@ -340,44 +345,46 @@ def create_isaacsim_infos(dataset_cfg, class_names, data_path, save_path, worker
 
     print('---------------Start to generate data infos---------------')
 
-    # 2. Train Infos 생성
-    # set_split('train') -> 내부적으로 root/training 폴더를 바라보고, 리스트의 앞 80%를 가져옴
-    print(f"Generating {train_split} infos...")
-    dataset.set_split(train_split)
-    isaac_infos_train = dataset.get_infos(num_workers=workers, has_label=True, count_inside_pts=True)
-    with open(train_filename, 'wb') as f:
-        pickle.dump(isaac_infos_train, f)
-    print('isaac info train file is saved to %s' % train_filename)
+    # 2. Train Infos 생성 (Skip 가능)
+    if not ONLY_TEST:
+        print(f"Generating {train_split} infos...")
+        dataset.set_split(train_split)
+        isaac_infos_train = dataset.get_infos(num_workers=workers, has_label=True, count_inside_pts=True)
+        with open(train_filename, 'wb') as f:
+            pickle.dump(isaac_infos_train, f)
+        print('isaac info train file is saved to %s' % train_filename)
 
-    # 3. Val Infos 생성
-    # set_split('val') -> 내부적으로 root/training 폴더를 바라보고, 리스트의 뒤 20%를 가져옴
-    print(f"Generating {val_split} infos...")
-    dataset.set_split(val_split)
-    isaac_infos_val = dataset.get_infos(num_workers=workers, has_label=True, count_inside_pts=True)
-    with open(val_filename, 'wb') as f:
-        pickle.dump(isaac_infos_val, f)
-    print('isaac info val file is saved to %s' % val_filename)
+    # 3. Val Infos 생성 (Skip 가능)
+    if not ONLY_TEST:
+        print(f"Generating {val_split} infos...")
+        dataset.set_split(val_split)
+        isaac_infos_val = dataset.get_infos(num_workers=workers, has_label=True, count_inside_pts=True)
+        with open(val_filename, 'wb') as f:
+            pickle.dump(isaac_infos_val, f)
+        print('isaac info val file is saved to %s' % val_filename)
 
-    # 4. TrainVal 통합 Info 저장
-    with open(trainval_filename, 'wb') as f:
-        pickle.dump(isaac_infos_train + isaac_infos_val, f)
-    print('isaac info trainval file is saved to %s' % trainval_filename)
+    # 4. TrainVal 통합 Info 저장 (Skip 가능)
+    if not ONLY_TEST:
+        with open(trainval_filename, 'wb') as f:
+            pickle.dump(isaac_infos_train + isaac_infos_val, f)
+        print('isaac info trainval file is saved to %s' % trainval_filename)
 
-    # 5. Test Infos 생성
-    # set_split('test') -> 내부적으로 root/testing 폴더를 바라보고, 전체 리스트를 가져옴
+    # 5. Test Infos 생성 (항상 실행)
     print(f"Generating {test_split} infos...")
     dataset.set_split(test_split)
-    # Test셋은 보통 Label이 없다고 가정 (has_label=False). 만약 라벨이 있다면 True로 변경.
+    
+    # [중요] 이전 질문에서 해결한대로 has_label=True 유지
     isaac_infos_test = dataset.get_infos(num_workers=workers, has_label=True, count_inside_pts=True)
+    
     with open(test_filename, 'wb') as f:
         pickle.dump(isaac_infos_test, f)
     print('isaac info test file is saved to %s' % test_filename)
 
-    # 6. GT Database 생성 (Data Augmentation용)
-    # Train 셋을 기준으로 생성
-    print('---------------Start create groundtruth database for data augmentation---------------')
-    dataset.set_split(train_split) 
-    dataset.create_groundtruth_database(train_filename, split=train_split)
+    # 6. GT Database 생성 (Skip 가능)
+    if not ONLY_TEST:
+        print('---------------Start create groundtruth database for data augmentation---------------')
+        dataset.set_split(train_split) 
+        dataset.create_groundtruth_database(train_filename, split=train_split)
 
     print('---------------Data preparation Done---------------')
 
@@ -395,6 +402,6 @@ if __name__ == '__main__':
         create_isaacsim_infos(
             dataset_cfg=dataset_cfg,
             class_names=['Truck','Pedestrian'],
-            data_path=ROOT_DIR / 'data' / 'isaacsim',
-            save_path=ROOT_DIR / 'data' / 'isaacsim'
+            data_path=ROOT_DIR / 'data' / 'isaacsim3',
+            save_path=ROOT_DIR / 'data' / 'isaacsim3'
         )
