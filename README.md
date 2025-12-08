@@ -1,3 +1,26 @@
+# ZENIC - ROBOTICS
+
+## environmnet
+```bash
+conda activate a2d2
+```
+
+a2d2_kitti 폴더에서 학습 및 데이터 생성을 진행
+```bash
+## dataset 생성
+python -m pcdet.datasets.isaacsim.isaacsim_dataset create_isaacsim_infos tools/cfgs/dataset_configs/isaacsim_dataset2.yaml
+## train
+python tools/train.py --cfg_file tools/cfgs/isaacsim_models/second.yaml --batch_size 4 --workers 4 --extra_tag isaac_experiment
+## 평가 및 AP와 검출 결과
+python ./tools/demo_box.py  --cfg_file tools/cfgs/isaacsim_models/second.yaml     --ckpt output/isaacsim_models/second/isaac_experiment/ckpt/checkpoint_epoch_162.pth     --data_path data/isaacsim/testing/velodyne_points/data/   --save_path output/vis_results     --score_thresh 0.5
+```
+
+```bash
+# eval dataset
+python ./tools/eval_isaac.py --cfg_file ./tools/cfgs/isaacsim_models/second2.yaml --ckpt output/isaacsim_models/second/isaac_experiment/ckpt/checkpoint_epoch_162.pth --dist_thresh 30.0
+```
+
+
 <img src="docs/open_mmlab.png" align="right" width="30%">
 
 # OpenPCDet
