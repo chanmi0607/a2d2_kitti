@@ -368,7 +368,7 @@ def create_isaacsim_infos(dataset_cfg, class_names, data_path, save_path, worker
     print(f"Generating {test_split} infos...")
     dataset.set_split(test_split)
     # Test셋은 보통 Label이 없다고 가정 (has_label=False). 만약 라벨이 있다면 True로 변경.
-    isaac_infos_test = dataset.get_infos(num_workers=workers, has_label=False, count_inside_pts=False)
+    isaac_infos_test = dataset.get_infos(num_workers=workers, has_label=True, count_inside_pts=True)
     with open(test_filename, 'wb') as f:
         pickle.dump(isaac_infos_test, f)
     print('isaac info test file is saved to %s' % test_filename)
