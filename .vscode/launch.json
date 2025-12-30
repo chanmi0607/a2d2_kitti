@@ -1,6 +1,45 @@
 {
     "version": "0.2.0",
     "configurations": [
+        {
+            "name": "📦 [PointPillar] a2d2 demo",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/tools/demo.py", // <-- 이 파일 경로를 확인하세요!
+            "console": "integratedTerminal",
+            "args": [
+                "--cfg_file", "/home/a/OpenPCDet/tools/cfgs/a2d2_models/pointpillar.yaml",
+                "--data_path", "/home/a/OpenPCDet/data/a2d2/training/velodyne",
+                // "--ckpt", "/home/a/Downloads/pointpillar_7728.pth"
+                "--ckpt", "output/a2d2_models/pointpillar/a2d2_pointpillar_test/ckpt/checkpoint_epoch_200.pth"
+            ]
+        },
+        {
+            "name": "📦 [SECOND] a2d2 demo",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/tools/demo.py", // <-- 이 파일 경로를 확인하세요!
+            "console": "integratedTerminal",
+            "args": [
+                "--cfg_file", "/home/a/OpenPCDet/tools/cfgs/a2d2_models/second.yaml",
+                "--data_path", "/home/a/OpenPCDet/data/a2d2/training/velodyne",
+                // "--ckpt", "/home/a/Downloads/pointpillar_7728.pth"
+                "--ckpt", "/home/a/OpenPCDet/output/a2d2_models/second/a2d2_cyclist_best/ckpt/checkpoint_epoch_200.pth"
+            ]
+        },
+        {
+            "name": "📦 [PointPillar] train",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/tools/train.py", // <-- 이 파일 경로를 확인하세요!
+            "console": "integratedTerminal",
+            "args": [
+                "--cfg_file", "/home/a/OpenPCDet/tools/cfgs/a2d2_models/pointpillar.yaml",
+                "--extra_tag", "pointpillar_class3",
+                //"--data_path", "/home/a/OpenPCDet/data/kitti/training/velodyne",
+                // "--ckpt", "/home/a/Downloads/pointpillar_7728.pth"
+            ]
+        },
         // -----------------------------------------------------------------
         // --- 1단계: 피처 추출 (RPN 실행 -> .csv 파일 생성) ---
         // -----------------------------------------------------------------

@@ -92,11 +92,13 @@ class PillarVFE(VFETemplate):
         return paddings_indicator
 
     def forward(self, batch_dict, **kwargs):
-  
+        # (D, P, N)
         voxel_features, voxel_num_points, coords = batch_dict['voxels'], batch_dict['voxel_num_points'], batch_dict['voxel_coords']
+        # pillar 내부 평균 점과 떨어진 거리 (x_c, y_c, z_c)
         points_mean = voxel_features[:, :, :3].sum(dim=1, keepdim=True) / voxel_num_points.type_as(voxel_features).view(-1, 1, 1)
         f_cluster = voxel_features[:, :, :3] - points_mean
 
+        # pillar 중심 기준 상대 위치 (x_p, y_p, z_p)
         f_center = torch.zeros_like(voxel_features[:, :, :3])
         f_center[:, :, 0] = voxel_features[:, :, 0] - (coords[:, 3].to(voxel_features.dtype).unsqueeze(1) * self.voxel_x + self.x_offset)
         f_center[:, :, 1] = voxel_features[:, :, 1] - (coords[:, 2].to(voxel_features.dtype).unsqueeze(1) * self.voxel_y + self.y_offset)
@@ -110,6 +112,7 @@ class PillarVFE(VFETemplate):
         if self.with_distance:
             points_dist = torch.norm(voxel_features[:, :, :3], 2, 2, keepdim=True)
             features.append(points_dist)
+        # (D, P, N)
         features = torch.cat(features, dim=-1)
 
         voxel_count = features.shape[1]

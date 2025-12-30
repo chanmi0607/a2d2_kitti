@@ -1,6 +1,7 @@
 # CLASS_NAMES: ['Car','Truck','UtilityVehicle','Cyclist','Bus','Trailer','Pedestrian']
-CLASS_NAMES: ['Car','Truck','UtilityVehicle','Cyclist','Bicycle','MotorBiker','Bus','Trailer','Pedestrian']
+#CLASS_NAMES: ['Car','Truck','UtilityVehicle','Cyclist','Bicycle','MotorBiker','Bus','Trailer','Pedestrian']
 #CLASS_NAMES: ['Car','Cyclist','Pedestrian']
+CLASS_NAMES: ['Car', 'Pedestrian', 'Truck']
 
 DATA_CONFIG:
     _BASE_CONFIG_: tools/cfgs/dataset_configs/a2d2_dataset.yaml

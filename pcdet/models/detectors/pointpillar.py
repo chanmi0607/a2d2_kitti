@@ -11,6 +11,10 @@ class PointPillar(Detector3DTemplate):
             batch_dict = cur_module(batch_dict)
 
         if self.training:
+            # tb_dict : tensorboard dict 텐서보드에 기록할 로그 dict
+            # disp_dict : display dict 터미널에 사용할 로그 dict
+            # ret_dict : return dict 함수 반환용 dict
+
             loss, tb_dict, disp_dict = self.get_training_loss()
 
             ret_dict = {

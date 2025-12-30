@@ -529,9 +529,10 @@ if __name__ == "__main__":
 
             # 전체 포인트 중 지면 제거
             all_indices = np.arange(len(points))
-            object_indices = np.setdiff1d(all_indices, roi_ground_indices)
+            #object_indices = np.setdiff1d(all_indices, roi_ground_indices)
+            full_object_indices = np.setdiff1d(all_indices, roi_ground_indices)
 
-            non_ground_points = points[object_indices]
+            non_ground_points = points[full_object_indices]
 
             print(f"지면 제거 후 객체 포인트 수: {len(non_ground_points)}")
 
