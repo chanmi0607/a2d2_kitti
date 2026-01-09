@@ -23,7 +23,7 @@ except ImportError:
 
 # --- ❗️ 실행 전 이 경로들을 자신의 환경에 맞게 수정해주세요 ---
 # A2D2 원본 데이터셋의 루트 경로
-A2D2_ROOT = Path("/home/a/OpenPCDet/data/a2d2/camera_lidar_semantic_bboxes")
+A2D2_ROOT = Path("/media/a/새 볼륨/camera_lidar_semantic_bboxes")
 # 변환된 KITTI 데이터가 저장될 루트 경로
 KITTI_ROOT = Path("/home/a/OpenPCDet/data/a2d2")
 # ---------------------------------------------------------
@@ -33,7 +33,14 @@ def transform_and_save_npz_to_bin(npz_path, bin_path, calib_data, lidar_name='fr
     try:
         data = np.load(npz_path) # .npz 파일 로드
         points_vehicle = data['points'] # A2D2 차량 좌표계의 포인트 클라우드
-        reflectance = data['reflectance'].reshape(-1, 1) # 반사 강도
+        reflectance = data['reflectance'] # 반사 강도
+        lidar_ids = data['lidar_id']
+
+        FRONT_CENTER_ID = 3
+        mask = (lidar_ids == FRONT_CENTER_ID)
+
+        points_vehicle = points_vehicle[mask]
+        reflectance = reflectance[mask].reshape(-1, 1)
 
         # --- ▼▼▼▼▼ 수정된 부분 ▼▼▼▼▼ ---
         # The A2D2 vehicle frame and KITTI velodyne frame share the same orientation.
@@ -250,11 +257,11 @@ def process_all_sequences(a2d2_root, kitti_root):
     
     # KITTI 출력 폴더 생성
     out_velo_path = kitti_root / "training" / "velodyne"
-    out_label_path = kitti_root / "training" / "label_2"
-    out_calib_path = kitti_root / "training" / "calib"
+    # out_label_path = kitti_root / "training" / "label_2"
+    # out_calib_path = kitti_root / "training" / "calib"
     out_velo_path.mkdir(parents=True, exist_ok=True)
-    out_label_path.mkdir(parents=True, exist_ok=True)
-    out_calib_path.mkdir(parents=True, exist_ok=True)
+    # out_label_path.mkdir(parents=True, exist_ok=True)
+    # out_calib_path.mkdir(parents=True, exist_ok=True)
 
     # A2D2 마스터 보정 파일 로드
     master_calib_path = a2d2_root / "camera_lidar.json"
@@ -287,8 +294,8 @@ def process_all_sequences(a2d2_root, kitti_root):
             # --- 경로 정의 ---
             label_file = label_path / f"{npz_file.stem.replace('lidar', 'label3D')}.json"
             bin_out_file = out_velo_path / f"{frame_id}.bin"
-            label_out_file = out_label_path / f"{frame_id}.txt"
-            calib_out_file = out_calib_path / f"{frame_id}.txt"
+            # label_out_file = out_label_path / f"{frame_id}.txt"
+            # calib_out_file = out_calib_path / f"{frame_id}.txt"
 
             # print(f"  - Frame {frame_id}:")
 
@@ -296,18 +303,19 @@ def process_all_sequences(a2d2_root, kitti_root):
             # 1. BIN 변환
             bin_success = transform_and_save_npz_to_bin(npz_file, bin_out_file, calib_data)
 
-            # 2. LABEL 변환
-            if not label_file.exists():
-                print(f"    [WARN] 라벨 파일 없음, 건너뜀: {label_file.name}")
-                label_success = False
-            else:
-                label_success, found_dontcares = convert_a2d2_to_kitti_label(label_file, calib_data, label_out_file)
-                if label_success:
-                    master_dontcare_set.update(found_dontcares) # 마스터 set에 취합            
-            # 3. CALIB 생성
-            calib_success = create_kitti_calib_file(calib_data, calib_out_file)
+            # # 2. LABEL 변환
+            # if not label_file.exists():
+            #     print(f"    [WARN] 라벨 파일 없음, 건너뜀: {label_file.name}")
+            #     label_success = False
+            # else:
+            #     label_success, found_dontcares = convert_a2d2_to_kitti_label(label_file, calib_data, label_out_file)
+            #     if label_success:
+            #         master_dontcare_set.update(found_dontcares) # 마스터 set에 취합            
+            # # 3. CALIB 생성
+            # calib_success = create_kitti_calib_file(calib_data, calib_out_file)
 
-            if bin_success and label_success and calib_success:
+            #if bin_success and label_success and calib_success:
+            if bin_success:
                 total_count += 1
                 # print(f"    [OK] Frame {frame_id} 변환 완료.")
                 # --- ❗️ MODIFIED: Call visualization for the first successful frame ---

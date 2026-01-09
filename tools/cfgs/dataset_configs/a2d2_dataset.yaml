@@ -1,6 +1,6 @@
 # CLASS_NAMES: ['Car','Truck','UtilityVehicle','Cyclist','Bicycle','MotorBiker','Bus','Trailer','Pedestrian']
 #CLASS_NAMES: ['Car','Truck','UtilityVehicle','Cyclist','Bus','Trailer','Pedestrian']
-CLASS_NAMES: ['Car','Cyclist','Pedestrian']
+CLASS_NAMES: ['Car','Truck','Pedestrian']
 
 DATASET: 'A2D2Dataset'
 DATA_PATH: '/home/a/OpenPCDet/data/a2d2'

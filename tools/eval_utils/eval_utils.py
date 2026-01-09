@@ -57,6 +57,11 @@ def eval_one_epoch(cfg, args, model, dataloader, epoch_id, logger, dist_test=Fal
     start_time = time.time()
     for i, batch_dict in enumerate(dataloader):
         load_data_to_gpu(batch_dict)
+        for k, v in batch_dict.items():
+            if torch.is_tensor(v):
+                if not v.is_cuda:
+                    print("[CPU TENSOR LEFT]", k, v.dtype, v.shape)
+
 
         if getattr(args, 'infer_time', False):
             start_time = time.time()

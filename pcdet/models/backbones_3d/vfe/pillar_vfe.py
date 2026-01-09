@@ -26,7 +26,7 @@ class PFNLayer(nn.Module):
 
         self.part = 50000
 
-    def forward(self, inputs):
+    def forward(self, inputs):  
         if inputs.shape[0] > self.part:
             # nn.Linear performs randomly when batch size is too large
             num_parts = inputs.shape[0] // self.part

@@ -41,19 +41,19 @@ MODEL:
         ANCHOR_GENERATOR_CONFIG: [
             {
                 'class_name': 'Car',
-                'anchor_sizes': [[3.95, 2.0, 1.71]],
+                'anchor_sizes': [[3.9, 1.6, 1.56]],
                 'anchor_rotations': [0, 1.57],
-                'anchor_bottom_heights': [0],
+                'anchor_bottom_heights': [-1.78],
                 'align_center': False,
                 'feature_map_stride': 8,
-                'matched_threshold': 0.55,
-                'unmatched_threshold': 0.4
+                'matched_threshold': 0.6,
+                'unmatched_threshold': 0.45
             },
             {
                 'class_name': 'Truck',
                 'anchor_sizes': [[9.21, 3.09, 3.82]], 
                 'anchor_rotations': [0, 1.57],
-                'anchor_bottom_heights': [0.0],
+                'anchor_bottom_heights': [-1.6],
                 'align_center': False,
                 'feature_map_stride': 8,
                 'matched_threshold': 0.5,
@@ -61,9 +61,9 @@ MODEL:
             },
             {
                 'class_name': 'Pedestrian',
-                'anchor_sizes': [[0.97, 0.77, 1.82]],
+                'anchor_sizes': [[0.8, 0.6, 1.73]],
                 'anchor_rotations': [0, 1.57],
-                'anchor_bottom_heights': [0],
+                'anchor_bottom_heights': [-0.6],
                 'align_center': False,
                 'feature_map_stride': 8,
                 'matched_threshold': 0.5,

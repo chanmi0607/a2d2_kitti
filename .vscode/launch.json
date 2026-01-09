@@ -11,7 +11,7 @@
                 "--cfg_file", "/home/a/OpenPCDet/tools/cfgs/a2d2_models/pointpillar.yaml",
                 "--data_path", "/home/a/OpenPCDet/data/a2d2/training/velodyne",
                 // "--ckpt", "/home/a/Downloads/pointpillar_7728.pth"
-                "--ckpt", "output/a2d2_models/pointpillar/a2d2_pointpillar_test/ckpt/checkpoint_epoch_200.pth"
+                "--ckpt", "output/a2d2_models/pointpillar/pointpillar_front/ckpt/checkpoint_epoch_200.pth"
             ]
         },
         {
@@ -36,6 +36,31 @@
             "args": [
                 "--cfg_file", "/home/a/OpenPCDet/tools/cfgs/a2d2_models/pointpillar.yaml",
                 "--extra_tag", "pointpillar_class3",
+                //"--data_path", "/home/a/OpenPCDet/data/kitti/training/velodyne",
+                // "--ckpt", "/home/a/Downloads/pointpillar_7728.pth"
+            ]
+        },
+        {
+            "name": "📦 [PointPillar] test",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/tools/test.py", // <-- 이 파일 경로를 확인하세요!
+            "console": "integratedTerminal",
+            "args": [
+                "--cfg_file", "/home/a/OpenPCDet/tools/cfgs/a2d2_models/pointpillar.yaml",
+                //"--data_path", "/home/a/OpenPCDet/data/kitti/training/velodyne",
+                "--ckpt", "/home/a/OpenPCDet/output/a2d2_models/pointpillar/pointpillar_front/ckpt/checkpoint_epoch_199.pth"
+            ]
+        },
+        {
+            "name": "📦 [SECOND] train",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/tools/train.py", // <-- 이 파일 경로를 확인하세요!
+            "console": "integratedTerminal",
+            "args": [
+                "--cfg_file", "/home/a/OpenPCDet/tools/cfgs/a2d2_models/second_bicycle.yaml",
+                "--extra_tag", "second_class3",
                 //"--data_path", "/home/a/OpenPCDet/data/kitti/training/velodyne",
                 // "--ckpt", "/home/a/Downloads/pointpillar_7728.pth"
             ]

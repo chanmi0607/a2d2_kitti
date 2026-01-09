@@ -10,7 +10,7 @@ from pcdet.utils import box_utils, calibration_kitti
 
 # --- 설정값 (사용자 환경에 맞게 수정) ---
 # 1. 생성된 예측 결과 pkl 파일 경로
-PRED_INFO_PATH = 'output/a2d2_models/pointpillar/pointpillar_class3/eval/eval_epoch_200/result.pkl' # 👈 본인 경로로 수정!
+PRED_INFO_PATH = 'output/a2d2_models/pointpillar/pointpillar_dataconfig/eval/eval_epoch_200/result.pkl' # 👈 본인 경로로 수정!
 # 2. Ground-Truth 라벨이 있는 디렉터리 경로
 LABEL_PATH = 'data/a2d2/training/label_2' # 👈 본인 경로로 수정!
 CALIB_PATH = 'data/a2d2/training/calib'
@@ -20,7 +20,7 @@ VAL_FILE_PATH = 'data/a2d2/ImageSets/val.txt'
 #CLASS_NAMES = ['Car', 'Truck', 'UtilityVehicle', 'Cyclist', 'Bicycle', 'MotorBiker', 'Bus', 'Trailer', 'Pedestrian']
 #CLASS_NAMES = ['Car', 'Truck', 'UtilityVehicle', 'Cyclist', 'Bus', 'Trailer', 'Pedestrian']
 CLASS_NAMES = ['Car', 'Pedestrian', 'Truck']
-IOU_THRESHOLD = 0.5
+IOU_THRESHOLD = 0.3
 CONFIDENCE_THRESHOLD = 0.3
 # 4. 거리 제한 (이 거리 이내의 객체만 평가에 포함)
 DISTANCE_THRESHOLD = 30.0
@@ -193,3 +193,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
